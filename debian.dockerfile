@@ -20,14 +20,14 @@ RUN rm /etc/nginx/conf.d/default.conf
 
 # Create gunicorn user and group, make directory for socket, and add nginx user
 # to gunicorn group so that it can read/write to the socket.
-RUN addgroup gunicorn \
+RUN addgroup --system gunicorn \
     && adduser --system --ingroup gunicorn gunicorn \
     && mkdir /var/run/gunicorn \
     && chown gunicorn:gunicorn /var/run/gunicorn \
     && adduser nginx gunicorn
 
 # Create celery user and group, make directory for beat schedule file.
-RUN addgroup celery \
+RUN addgroup --system celery \
     && adduser --system --ingroup celery celery \
     && mkdir /var/run/celery \
     && chown celery:celery /var/run/celery

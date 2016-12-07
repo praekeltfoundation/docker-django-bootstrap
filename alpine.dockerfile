@@ -12,14 +12,14 @@ COPY ./nginx/ /etc/nginx/
 
 # Create gunicorn user and group, make directory for socket, and add nginx user
 # to gunicorn group so that it can read/write to the socket.
-RUN addgroup gunicorn \
+RUN addgroup -S gunicorn \
     && adduser -S -G gunicorn gunicorn \
     && mkdir /var/run/gunicorn \
     && chown gunicorn:gunicorn /var/run/gunicorn \
     && adduser nginx gunicorn
 
 # Create celery user and group, make directory for beat schedule file.
-RUN addgroup celery \
+RUN addgroup -S celery \
     && adduser -S -G celery celery \
     && mkdir /var/run/celery \
     && chown celery:celery /var/run/celery
