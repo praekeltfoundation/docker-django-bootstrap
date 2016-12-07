@@ -5,7 +5,8 @@ MAINTAINER Praekelt Foundation <dev@praekeltfoundation.org>
 RUN apk --no-cache add libpq nginx
 
 # Install gunicorn
-RUN pip install gunicorn
+COPY ./requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
 
 # Copy in the Nginx config
 COPY ./nginx/ /etc/nginx/

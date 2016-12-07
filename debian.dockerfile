@@ -12,7 +12,8 @@ RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC64107
         nginx=${NGINX_VERSION}
 
 # Install gunicorn
-RUN pip install gunicorn
+COPY ./requirements.txt /requirements.txt
+RUN pip install -r /requirements.txt
 
 # Copy in the Nginx config
 COPY ./nginx/ /etc/nginx/
