@@ -124,7 +124,7 @@ See all the settings available for gunicorn [here](http://docs.gunicorn.org/en/l
 
 ### Nginx
 Nginx is set up with mostly default config:
-* Access logs are sent to stdout, error logs to stderr
+* Access logs are sent to stdout, error logs to stderr and log messages are prefixed with `nginx: ` to differentiate them from Gunicorn log messages
 * Listens on port 8000 (and this port is exposed in the Dockerfile)
 * Serves files from `/static/` and `/media/`
 * All other requests are proxied to the Gunicorn socket
