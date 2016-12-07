@@ -26,7 +26,7 @@ if not User.objects.filter(username='admin').exists():
   echo "Created superuser with username 'admin' and password '$SUPERUSER_PASSWORD'"
 fi
 
-nginx
+nginx -g 'daemon off;' &
 
 # Celery
 if [ -n "$CELERY_APP" ]; then
