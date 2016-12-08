@@ -4,8 +4,13 @@ services:
 language: bash
 
 env:
-  - VARIANT=debian
-  - VARIANT=alpine
+  global:
+    - REGISTRY_USER=praekeltorgdeploy
+    - secure: "UK7h5cBSPlsL1bPJx+S7ArYKHIUjEWfsITw8M/ObTLaIQHMq2uV3J/D7K5GFkqJFX9sUGmFZBkCu1J9JwpieO1Ew79B2/g4i0aDDmhIuE+IOo5tQ6jinAmP1NEVrCvk1LUTdXwk46VbUCGNxYpv44ge1zwhRrtNpMxaIqXsSYLOXjA7p7A/IghDRYDsRIjz6TfXNKcw+qWxzUTSUjLqgcZqezvI3c9VRRgD94vKh9KpLryVtSPxGjUQTKD6cfu6Yvbz6TzVGp6QCEM9ysRdRJx0ecsP39XBj8VVnqI34ux+4sqiwdqM7SQTlaKFJK+o6dMAX5ZEkA9jQw2kWDX0Pg60zHX+vbH1vycPVaQ6ln9J68pNZx6AMFbJpDkTacrmStH9uIuH6+pN4j4gNsT4TkwtFJDcRuGI0gShqBgQVVHhGuCECfj6RZQ7K35NsQVHXQy47AkwGODu3xUwAuiMOeQVR2rEYCBnJfx+qLY5hIsPzR4MhidLPSZa5T520uhp+35pVAk95DYYEL+6N2C3wIOmtEl6gZNC1P0IgCDuTOU/u5+TCaS5C7M3aWk26SL+n3JnFeCAgLr+OYntHwW9PIen70OG1bokGdxQZ00DvF9veyQz+6IGVEG1Cm5MZv6Cp9bqgpGYMRhKBEAJyKrT+slt6ah10+eIJbT7p4HIgKBM="
+    - DEFAULT_VARIANT=debian
+  matrix:
+    - VARIANT=debian
+    - VARIANT=alpine
 
 # Update Docker Engine
 before_install:
@@ -13,11 +18,19 @@ before_install:
   - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
 
 before_script:
-  - IMAGE_TAG="praekeltfoundation/django-bootstrap:$VARIANT"
-  - DOCKERFILE="$VARIANT.dockerfile"
+  - image="praekeltfoundation/django-bootstrap:$VARIANT"
+  - dockerfile="$VARIANT.dockerfile"
 script:
-  - docker build --tag "$IMAGE_TAG" --file "$DOCKERFILE" .
+  - docker build --tag "$image" --file "$dockerfile" .
+  - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" .
   - ./test.sh "$VARIANT"
 
 after_script:
   - docker images
+
+before_deploy:
+  - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
+deploy:
+  provider: script
+  # FIXME: Don't push the non-onbuild image for now until upstream images are updated
+  script: ./deploy.sh "$image-onbuild" --default "$DEFAULT_VARIANT"
