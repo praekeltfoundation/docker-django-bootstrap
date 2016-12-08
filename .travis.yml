@@ -32,7 +32,6 @@ before_deploy:
   - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
 deploy:
   provider: script
-  # FIXME: Don't push the non-onbuild image for now until upstream images are updated
-  script: ./deploy.sh "$image-onbuild" --default "$DEFAULT_VARIANT"
+  script: ./deploy.sh "$image" "$image-onbuild" --default "$DEFAULT_VARIANT"
   on:
     branch: develop
