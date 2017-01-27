@@ -1,4 +1,4 @@
-FROM praekeltfoundation/django-bootstrap:debian
+FROM praekeltfoundation/django-bootstrap:py2
 ONBUILD COPY . /app
 # chown the app directory after copying in case the copied files include
 # subdirectories that will be written to, e.g. the media directory
