@@ -2,7 +2,7 @@
 set -e
 
 # Add 'celery' to the front of the command if it's not there already
-[ "$1" != 'celery' ] || set -- celery "$@"
+[ "$1" = 'celery' ] || set -- celery "$@"
 
 # Set some common options if the env vars are set
 set -- "$@" \
