@@ -94,7 +94,7 @@ The following environment variables can be used to configure Celery. A number of
 
 #### `CELERY_LOGLEVEL`:
 * Required: no
-* Default: `INFO`
+* Default: none
 * Celery option: `-l`/`--loglevel`
 
 #### `CELERY_CONCURRENCY`:

@@ -31,23 +31,11 @@ nginx -g 'daemon off;' &
 # Celery
 if [ -n "$CELERY_APP" ]; then
   # Worker
-  su-exec celery \
-    celery worker \
-      --pidfile /var/run/celery/worker.pid \
-      --app "$CELERY_APP" \
-      ${CELERY_BROKER:+--broker "$CELERY_BROKER"} \
-      --loglevel "${CELERY_LOGLEVEL:-INFO}" \
-      --concurrency "${CELERY_CONCURRENCY:-1}" &
+  celery-entrypoint.sh worker --pidfile /var/run/celery/worker.pid &
 
   # Beat
   if [ -n "$CELERY_BEAT" ]; then
-    su-exec celery \
-      celery beat \
-        --pidfile /var/run/celery/beat.pid \
-        --schedule /var/run/celery/celerybeat-schedule \
-        --app "$CELERY_APP" \
-        ${CELERY_BROKER:+--broker "$CELERY_BROKER"} \
-        --loglevel "${CELERY_LOGLEVEL:-INFO}" &
+    celery-entrypoint.sh beat --pidfile /var/run/celery/beat.pid &
   fi
 fi
 
