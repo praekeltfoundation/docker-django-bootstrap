@@ -3,6 +3,8 @@ Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
+> **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tags (`:latest` and `:onbuild`) will remain Debian/Python 2-based as they have always been.
+
 ## Usage
 #### Step 0: Get your Django project in shape
 There are a few ways that your Django project needs to be set up in order to be compatible with this Docker image.
