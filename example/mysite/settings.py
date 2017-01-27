@@ -122,5 +122,5 @@ STATIC_ROOT = os.path.join(BASE_DIR, "static")
 STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.CachedStaticFilesStorage'
 
 # Default the Celery worker concurrency to 1, this is the Celery v3 format
-CELERYD_CONCURRENCY = os.environ.get('CELERYD_CONCURRENCY', 1)
+CELERYD_CONCURRENCY = os.environ.get('CELERY_CONCURRENCY', 1)
 
