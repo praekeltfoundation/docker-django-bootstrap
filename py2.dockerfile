@@ -1,5 +1,4 @@
 FROM praekeltfoundation/python-base:debian
-MAINTAINER Praekelt Foundation <dev@praekeltfoundation.org>
 
 # Install libpq for PostgreSQL support and Nginx to serve everything
 # Get Nginx from the upstream repo so that we're up-to-date with Alpine and have
