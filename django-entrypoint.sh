@@ -47,13 +47,19 @@ if not User.objects.filter(username='admin').exists():
     fi
   fi
 
+  if [ -n "$APP_MODULE" ]; then
+    echo 'DEPRECATED: Providing APP_MODULE via an environment variable is deprecated.
+            Please provide it using the container command rather.' 1>&2
+    set -- "$@" "$APP_MODULE"
+  fi
+
   # Set some sensible Gunicorn options, needed for things to work with Nginx
 
   # umask working files (worker tmp files & unix socket) as 0o117 (i.e. chmod as
   # 0o660) so that they are only read/writable by gunicorn and nginx users.
   # FIXME: Have to specify umask as decimal, not octal (0o117 = 79):
   # https://github.com/benoitc/gunicorn/issues/1325
-  set -- "$@" $APP_MODULE \
+  set -- "$@" \
     --pid /var/run/gunicorn/gunicorn.pid \
     --user gunicorn --group gunicorn --umask 79 \
     --bind unix:/var/run/gunicorn/gunicorn.sock \

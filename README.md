@@ -39,7 +39,7 @@ Let's go through these lines one-by-one:
  3. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
  4. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
-\*Note that previously the way to do this was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way.
+\*Note that previously the way to do this was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
 
 The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
  1. `COPY . /app` - copies the source of your project into the image
@@ -144,14 +144,13 @@ Set this option to any non-empty value (e.g. "`1`") to have a [Celery beat](http
 ## Other configuration
 ### Gunicorn
 Gunicorn is run with some basic configuration:
-* Runs WSGI app defined in `APP_MODULE` environment variable
 * Starts workers under the `gunicorn` user and group
 * Listens on a Unix socket at `/var/run/gunicorn/gunicorn.sock`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
 
 Extra settings can be provided by overriding the `CMD` instruction to pass extra parameters to the entrypoint script. For example:
 ```dockerfile
-CMD ["django-entrypoint.sh", "--threads", "5", "--timeout", "50"]
+CMD ["my_django_project.wsgi:application", "--threads", "5", "--timeout", "50"]
 ```
 
 See all the settings available for gunicorn [here](http://docs.gunicorn.org/en/latest/settings.html). A common setting is the number of Gunicorn workers which can be set with the `WEB_CONCURRENCY` environment variable.
