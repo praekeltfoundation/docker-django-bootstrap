@@ -136,7 +136,7 @@ Note that by default Celery runs as many worker processes as there are processor
 * Celery option: `-c`/`--concurrency`
 
 #### `CELERY_BEAT`:
-Set this option to any non-empty value (e.g. "`1`") to have a [Celery beat](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html) scheduler process run as well.
+Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html) scheduler process run as well.
 * Required: no
 * Default: none
 * Celery option: n/a
