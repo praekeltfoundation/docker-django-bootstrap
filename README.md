@@ -28,16 +28,18 @@ If your project makes use of user-uploaded media files, it must be set up as fol
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
 FROM praekeltfoundation/django-bootstrap:onbuild
-ENV DJANGO_SETTINGS_MODULE "my_django_project.settings"
+ENV DJANGO_SETTINGS_MODULE my_django_project.settings
 RUN django-admin collectstatic --noinput
-ENV APP_MODULE "my_django_project.wsgi:application"
+CMD ["my_django_project.wsgi:application"]
 ```
 
 Let's go through these lines one-by-one:
  1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap:onbuild` base image.
  2. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
  3. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
- 4. We set the `APP_MODULE` environment variable that will be passed to `gunicorn`, which is installed and run in the `django-bootstrap` base image. `gunicorn` needs to know which WSGI application to run.
+ 4. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
+
+\*Note that previously the way to do this was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way.
 
 The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
  1. `COPY . /app` - copies the source of your project into the image
