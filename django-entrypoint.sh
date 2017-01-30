@@ -1,51 +1,63 @@
 #!/usr/bin/env sh
 set -e
 
-if [ -z "$APP_MODULE" ]; then
-  echo "The \$APP_MODULE environment variable must be set to the WSGI application module name"
-  exit 1
+# No args or looks like options or the APP_MODULE for Gunicorn
+if [ "$#" = 0 ] || \
+    [ "${1#-}" != "$1" ] || \
+    echo "$1" | grep -Eq '^([_A-Za-z]\w*\.)*[_A-Za-z]\w*:[_A-Za-z]\w*$'; then
+  set -- gunicorn "$@"
 fi
 
-# Do an extra chown of the /app directory at runtime in addition to the one in
-# the build process in case any directories are mounted as root-owned volumes at
-# runtime.
-chown -R gunicorn:gunicorn /app
+# Looks like a Celery command, let's run that with Celery's entrypoint script
+if [ "$1" = 'celery' ]; then
+  set -- celery-entrypoint.sh "$@"
+fi
 
-# Run the migration as the gunicorn user so that if it creates a local DB (e.g.
-# when using sqlite in development), that DB is still writable. Ultimately, the
-# user shouldn't really be using a local DB and it's difficult to offer support
-# for all the cases in which a local DB might be created -- but here we do the
-# minimum.
-su-exec gunicorn django-admin migrate --noinput
+if [ "$1" = 'gunicorn' ]; then
+  # Do an extra chown of the /app directory at runtime in addition to the one in
+  # the build process in case any directories are mounted as root-owned volumes
+  # at runtime.
+  chown -R gunicorn:gunicorn /app
 
-if [ -n "$SUPERUSER_PASSWORD" ]; then
-  echo "from django.contrib.auth.models import User
+  # Run the migration as the gunicorn user so that if it creates a local DB
+  # (e.g. when using sqlite in development), that DB is still writable.
+  # Ultimately, the user shouldn't really be using a local DB and it's difficult
+  # to offer support for all the cases in which a local DB might be created --
+  # but here we do the minimum.
+  su-exec gunicorn django-admin migrate --noinput
+
+  if [ -n "$SUPERUSER_PASSWORD" ]; then
+    echo "from django.contrib.auth.models import User
 if not User.objects.filter(username='admin').exists():
     User.objects.create_superuser('admin', 'admin@example.com', '$SUPERUSER_PASSWORD')
 " | su-exec gunicorn django-admin shell
-  echo "Created superuser with username 'admin' and password '$SUPERUSER_PASSWORD'"
-fi
-
-nginx -g 'daemon off;' &
-
-# Celery
-if [ -n "$CELERY_APP" ]; then
-  # Worker
-  celery-entrypoint.sh worker --pidfile /var/run/celery/worker.pid &
-
-  # Beat
-  if [ -n "$CELERY_BEAT" ]; then
-    celery-entrypoint.sh beat --pidfile /var/run/celery/beat.pid &
+    echo "Created superuser with username 'admin' and password '$SUPERUSER_PASSWORD'"
   fi
+
+  nginx -g 'daemon off;' &
+
+  # Celery
+  if [ -n "$CELERY_APP" ]; then
+    # Worker
+    celery-entrypoint.sh worker --pidfile /var/run/celery/worker.pid &
+
+    # Beat
+    if [ -n "$CELERY_BEAT" ]; then
+      celery-entrypoint.sh beat --pidfile /var/run/celery/beat.pid &
+    fi
+  fi
+
+  # Set some sensible Gunicorn options, needed for things to work with Nginx
+
+  # umask working files (worker tmp files & unix socket) as 0o117 (i.e. chmod as
+  # 0o660) so that they are only read/writable by gunicorn and nginx users.
+  # FIXME: Have to specify umask as decimal, not octal (0o117 = 79):
+  # https://github.com/benoitc/gunicorn/issues/1325
+  set -- "$@" $APP_MODULE \
+    --pid /var/run/gunicorn/gunicorn.pid \
+    --user gunicorn --group gunicorn --umask 79 \
+    --bind unix:/var/run/gunicorn/gunicorn.sock \
+    ${GUNICORN_ACCESS_LOGS:+--access-logfile -}
 fi
 
-# umask working files (worker tmp files & unix socket) as 0o117 (i.e. chmod as
-# 0o660) so that they are only read/writable by gunicorn and nginx users.
-# FIXME: Have to specify umask as decimal, not octal (0o117 = 79):
-# https://github.com/benoitc/gunicorn/issues/1325
-exec gunicorn "$APP_MODULE" \
-  --pid /var/run/gunicorn/gunicorn.pid \
-  --user gunicorn --group gunicorn --umask 79 \
-  --bind unix:/var/run/gunicorn/gunicorn.sock \
-  ${GUNICORN_ACCESS_LOGS:+--access-logfile -} \
-  "$@"
+exec "$@"
