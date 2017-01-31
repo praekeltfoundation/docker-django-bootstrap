@@ -25,8 +25,7 @@ script:
   - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" onbuild
   - ./test.sh "$VARIANT"
   # FIXME: This is a quick hack
-  - docker build --tag "$image"-prometheus --file prometheus/"$dockerfile" prometheus
-  - container="$(docker run -d -p 8000:8000 -p 9145:9145 "$image"-prometheus nginx -g 'daemon off;')" && sleep 5
+  - container="$(docker run -d -p 8000:8000 -p 9145:9145 "$image" nginx -g 'daemon off;')" && sleep 5
   # Make 2 requests: one 502, one 200
   - curl localhost:8000/foo && curl localhost:9145/metrics
   - metrics="$(curl localhost:9145/metrics)"

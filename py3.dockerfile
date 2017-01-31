@@ -12,16 +12,21 @@ RUN addgroup --system celery \
     && chown celery:celery /var/run/celery
 
 # Install libpq for psycopg2 for PostgreSQL support
-RUN apt-get-install.sh libpq5
+# Install nginx
+RUN apt-get-install.sh libpq5 nginx-extras \
+    && adduser www-data gunicorn
 
-# Install a modern Nginx and configure
-ENV NGINX_VERSION 1.10.2-1~jessie
-RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
-    && echo "deb http://nginx.org/packages/debian/ jessie nginx" >> /etc/apt/sources.list \
-    && apt-get-install.sh "nginx=$NGINX_VERSION" \
-    && rm /etc/nginx/conf.d/default.conf \
-# Add nginx user to gunicorn group so that Nginx can read/write to gunicorn socket
-    && adduser nginx gunicorn
+# Install nginx-lua-prometheus
+# FIXME: No release yet... install from known-good commit
+ENV NGINX_LUA_PROMETHEUS_GIT_SHA 0f229261cc45bb1e23c5cb418ad130d183229a7f
+RUN set -x \
+    && apt-get-install.sh wget \
+    && wget -O nginx-lua-prometheus.tar.gz "https://github.com/knyar/nginx-lua-prometheus/archive/$NGINX_LUA_PROMETHEUS_GIT_SHA.tar.gz" \
+    && mkdir /nginx-lua-prometheus \
+    && tar -xzC /nginx-lua-prometheus --strip-components=1 -f nginx-lua-prometheus.tar.gz \
+    && rm nginx-lua-prometheus.tar.gz \
+    && apt-get-purge.sh wget
+
 COPY nginx/ /etc/nginx/
 
 # Install gunicorn
