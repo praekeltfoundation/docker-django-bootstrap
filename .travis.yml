@@ -22,10 +22,10 @@ before_script:
   - dockerfile="$VARIANT.dockerfile"
 script:
   - docker build --tag "$image" --file "$dockerfile" .
-  - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" .
+  - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" onbuild
   - ./test.sh "$VARIANT"
   # FIXME: This is a quick hack
-  - docker build --tag "$image"-prometheus --file prometheus/"$dockerfile" .
+  - docker build --tag "$image"-prometheus --file prometheus/"$dockerfile" prometheus
   - container="$(docker run -d -p 8000:8000 -p 9145:9145 "$image"-prometheus nginx -g 'daemon off;')" && sleep 5
   # Make 2 requests: one 502, one 200
   - curl localhost:8000/foo && curl localhost:9145/metrics
