@@ -31,5 +31,7 @@ RUN pip install -r /requirements.txt
 EXPOSE 8000
 WORKDIR /app
 
-COPY django-entrypoint.sh /scripts/
-CMD ["django-entrypoint.sh"]
+COPY django-entrypoint.sh celery-entrypoint.sh \
+    /scripts/
+ENTRYPOINT ["dinit", "django-entrypoint.sh"]
+CMD []
