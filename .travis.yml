@@ -24,6 +24,15 @@ script:
   - docker build --tag "$image" --file "$dockerfile" .
   - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" .
   - ./test.sh "$VARIANT"
+  # FIXME: This is a quick hack
+  - docker build --tag "$image"-prometheus --file prometheus/"$dockerfile" .
+  - container="$(docker run -d -p 8000:8000 -p 9145:9145 "$image"-prometheus nginx -g 'daemon off;')" && sleep 5
+  # Make 2 requests: one 502, one 200
+  - curl localhost:8000/foo && curl localhost:9145/metrics
+  - metrics="$(curl localhost:9145/metrics)"
+  - echo "$metrics" | fgrep 'nginx_http_requests_total{host="localhost",status="200"} 1'
+  - echo "$metrics" | fgrep 'nginx_http_requests_total{host="localhost",status="502"} 1'
+  - docker stop "$container" && docker rm "$container"
 
 after_script:
   - docker images
