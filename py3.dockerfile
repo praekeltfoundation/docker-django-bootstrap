@@ -1,4 +1,4 @@
-FROM praekeltfoundation/python3-base:debian
+FROM praekeltfoundation/python-base:3.6
 
 # Create the users and working directories first as they shouldn't change often
 RUN addgroup --system gunicorn \
