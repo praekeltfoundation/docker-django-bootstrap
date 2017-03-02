@@ -25,7 +25,7 @@ SECRET_KEY = '2^!@63mf-#%l8m_v*o3hz(&2iw35o_6h^3^&x$+1rm558^)_i9'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -123,4 +123,3 @@ STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.CachedStaticFilesStora
 
 # Default the Celery worker concurrency to 1, this is the Celery v3 format
 CELERYD_CONCURRENCY = os.environ.get('CELERY_CONCURRENCY', 1)
-
