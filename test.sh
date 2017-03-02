@@ -10,7 +10,8 @@ VARIANT="$1"
 shift || { usage >&2; exit 1; }
 trap '{ set +x; echo; echo FAILED; echo; } >&2' ERR
 
-function service_ip(service_name) {
+function service_ip() {
+  local service_name="$1"; shift
   docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker-compose ps -q $service_name)"
 }
 
