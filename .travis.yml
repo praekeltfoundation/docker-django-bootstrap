@@ -1,7 +1,7 @@
 sudo: required
 services:
   - docker
-language: bash
+language: python
 
 env:
   global:
@@ -12,10 +12,12 @@ env:
     - VARIANT=py2
     - VARIANT=py3
 
-# Update Docker Engine
+# Update Docker Engine and Compose
 before_install:
   - sudo apt-get update
   - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
+  - pip install --upgrade docker-compose
+install: []
 
 before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"
