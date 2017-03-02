@@ -1,0 +1,34 @@
+version: '2.1'
+
+services:
+  web:
+    image: "mysite:${VARIANT:-py3}"
+    build:
+      context: .
+      dockerfile: "${VARIANT:-py3}.dockerfile"
+    environment:
+      SECRET_KEY: secret
+      DATABASE_URL: postgres://mysite:secret@db/mysite
+      CELERY_BROKER_URL: amqp://mysite:secret@amqp:5672//mysite
+  worker:
+    extends:
+      service: web
+    command: [celery, worker, -A, mysite]
+  beat:
+    extends:
+      service: web
+    command: [celery, beat, -A, mysite]
+  db:
+    image: postgres
+    environment:
+      POSTGRES_DB: mysite
+      POSTGRES_USER: mysite
+      POSTGRES_PASSWORD: secret
+  amqp:
+    image: rabbitmq:management
+    ports:
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_VHOST: /mysite
+      RABBITMQ_DEFAULT_USER: mysite
+      RABBITMQ_DEFAULT_PASS: secret

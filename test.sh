@@ -10,68 +10,52 @@ VARIANT="$1"
 shift || { usage >&2; exit 1; }
 trap '{ set +x; echo; echo FAILED; echo; } >&2' ERR
 
+function service_ip(service_name) {
+  docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker-compose ps -q $service_name)"
+}
+
 set -x
 
-CONTAINERS=()
-function docker_run {
-  # Run a detached container temporarily for tests. Removes the container when
-  # the script exits and sleeps a bit to wait for it to start.
-  local container
-  container="$(docker run -d "$@")"
-  CONTAINERS+=("$container")
-  sleep 5
-}
+cd example
 
-function remove_containers {
-  echo "Stopping and removing containers..."
-  for container in "${CONTAINERS[@]}"; do
-    docker stop "$container"
-    docker rm -f "$container"
-  done
-}
+# Bring up the DB and AMQP first
+docker-compose up -d db amqp && sleep 5
 
-# Build example project image
-docker build --tag mysite --file "example/$VARIANT.dockerfile" example
+# Bring everything else up
+docker-compose up -d && sleep 5
 
-# Remove containers and delete the image when script exits
-trap "{ set +x; remove_containers; docker rmi -f mysite; }" EXIT
+# Set a trap to bring everything down when we exit
+trap "{ set +x; docker-compose down; }" EXIT
 
-# Launch example project container
-docker_run --name mysite -p 8000:8000 mysite
+# Django tests
+# ############
+docker-compose ps web | grep 'Up'
+
+WEB_IP="$(service_ip web)"
 
 # Simple check to see if the site is up
-curl -fsL http://localhost:8000/admin | fgrep '<title>Log in | Django site admin</title>'
+curl -fsL http://$WEB_IP:8000/admin | fgrep '<title>Log in | Django site admin</title>'
 
 # Check that we can get a static file served by Nginx
-curl -fsL http://localhost:8000/static/admin/css/base.css | fgrep 'DJANGO Admin styles'
+curl -fsL http://$WEB_IP:8000/static/admin/css/base.css | fgrep 'DJANGO Admin styles'
 
 # Check that the caching header is set for a hashed file
-curl -fsI http://localhost:8000/static/admin/img/search.7cf54ff789c6.svg | fgrep 'Cache-Control: max-age=315360000'
+curl -fsI http://$WEB_IP:8000/static/admin/img/search.7cf54ff789c6.svg | fgrep 'Cache-Control: max-age=315360000'
 
 # Check that the caching header is *not* set for a file that isn't hashed
-curl -fsI http://localhost:8000/static/admin/img/search.svg | fgrep -v 'Cache-Control'
+curl -fsI http://$WEB_IP:8000/static/admin/img/search.svg | fgrep -v 'Cache-Control'
 
 
 # Celery tests
 # ############
-# Start a RabbitMQ broker
-docker_run --name celery-rabbitmq rabbitmq
-
-# Start a new django-bootstrap container linked to the broker
-# (set the container's hostname so that Celery's logs are easier to grep)
-docker_run --name mysite-celery \
-  --hostname mysite-celery \
-  --link celery-rabbitmq:rabbitmq \
-  -e CELERY_APP=mysite \
-  -e CELERY_BROKER=amqp://rabbitmq:5672 \
-  -e CELERY_BEAT=1 \
-  mysite
+docker-compose ps worker | grep 'Up'
+docker-compose ps beat | grep 'Up'
 
 # Check the logs to see if the Celery worker started up successfully
-docker logs mysite-celery 2>&1 | fgrep 'celery@mysite-celery ready'
+docker-compose logs worker 2>&1 | fgrep 'celery@mysite-celery ready'
 
 # Check the logs to see if Celery beat started up successfully
-docker logs mysite-celery 2>&1 | fgrep 'beat: Starting...'
+docker-compose logs beat 2>&1 | fgrep 'beat: Starting...'
 
 set +x
 echo
