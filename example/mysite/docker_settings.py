@@ -6,7 +6,9 @@ from .settings import *  # noqa
 
 env = environ.Env()
 
-SECRET_KEY = env('SECRET_KEY')
+SECRET_KEY = env('SECRET_KEY', SECRET_KEY)  # noqa: F405
+DEBUG = env('DEBUG', default=False)
+ALLOWED_HOSTS = env('ALLOWED_HOSTS', default=['*'])
 
 DATABASES = {
     'default': env.db(default='sqlite:///db.sqlite3')
@@ -14,6 +16,8 @@ DATABASES = {
 
 STATIC_ROOT = '/app/static'
 STATIC_URL = '/static/'
+STATICFILES_STORAGE = (
+    'django.contrib.staticfiles.storage.CachedStaticFilesStorage')
 
 MEDIA_ROOT = '/app/media'
 MEDIA_URL = '/media/'
