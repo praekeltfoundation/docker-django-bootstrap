@@ -6,7 +6,7 @@ from .settings import *  # noqa
 
 env = environ.Env()
 
-SECRET_KEY = env('SECRET_KEY', SECRET_KEY)  # noqa: F405
+SECRET_KEY = env('SECRET_KEY', default=SECRET_KEY)  # noqa: F405
 DEBUG = env('DEBUG', default=False)
 ALLOWED_HOSTS = env('ALLOWED_HOSTS', default=['*'])
 
