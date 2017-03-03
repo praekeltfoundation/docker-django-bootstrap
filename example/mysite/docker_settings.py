@@ -18,8 +18,34 @@ STATIC_URL = '/static/'
 MEDIA_ROOT = '/app/media'
 MEDIA_URL = '/media/'
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'simple': {
+            'format': '%(name)s %(levelname)s %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'simple',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': env('DJANGO_LOG_LEVEL', default='INFO'),
+        },
+        'celery': {
+            'handlers': ['console'],
+            'level': env('CELERY_LOG_LEVEL', default='INFO'),
+        },
+    },
+}
+
+
 CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='amqp://')
-CELERY_LOG_LEVEL = env('CELERY_LOG_LEVEL', default='INFO')
 CELERY_WORKER_CONCURRENCY = env('CELERY_WORKER_CONCURRENCY', default=1)
 
 # Celery 3.1 compatibility
