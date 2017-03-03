@@ -19,13 +19,13 @@ services:
       service: web
     command: [celery, beat, -A, mysite]
   db:
-    image: postgres
+    image: postgres:alpine
     environment:
       POSTGRES_DB: mysite
       POSTGRES_USER: mysite
       POSTGRES_PASSWORD: secret
   amqp:
-    image: rabbitmq:management
+    image: rabbitmq:alpine
     environment:
       RABBITMQ_DEFAULT_VHOST: /mysite
       RABBITMQ_DEFAULT_USER: mysite

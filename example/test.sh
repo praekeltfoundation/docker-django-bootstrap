@@ -55,6 +55,9 @@ docker-compose logs worker | grep -o 'celery@\w\+ ready'
 # Check the logs to see if Celery beat started up successfully
 docker-compose logs beat | fgrep 'beat: Starting...'
 
+# Check a queue was created in RabbitMQ
+docker-compose exec amqp rabbitmqctl list_queues -p /mysite | grep 'celery'
+
 set +x
 echo
 echo "PASSED"
