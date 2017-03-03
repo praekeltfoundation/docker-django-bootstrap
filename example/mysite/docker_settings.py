@@ -2,13 +2,14 @@ from __future__ import absolute_import
 
 import environ
 
+from .settings import ALLOWED_HOSTS, SECRET_KEY
 from .settings import *  # noqa
 
 env = environ.Env()
 
-SECRET_KEY = env('SECRET_KEY', default=SECRET_KEY)  # noqa: F405
-DEBUG = env('DEBUG', default=False)
-ALLOWED_HOSTS = env('ALLOWED_HOSTS', default=['*'])
+SECRET_KEY = env.str('SECRET_KEY', default=SECRET_KEY)
+DEBUG = env.bool('DEBUG', default=False)
+ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=ALLOWED_HOSTS)
 
 DATABASES = {
     'default': env.db(default='sqlite:///db.sqlite3')
@@ -39,18 +40,18 @@ LOGGING = {
     'loggers': {
         'django': {
             'handlers': ['console'],
-            'level': env('DJANGO_LOG_LEVEL', default='INFO'),
+            'level': env.str('DJANGO_LOG_LEVEL', default='INFO'),
         },
         'celery': {
             'handlers': ['console'],
-            'level': env('CELERY_LOG_LEVEL', default='INFO'),
+            'level': env.str('CELERY_LOG_LEVEL', default='INFO'),
         },
     },
 }
 
 
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='amqp://')
-CELERY_WORKER_CONCURRENCY = env('CELERY_WORKER_CONCURRENCY', default=1)
+CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='amqp://')
+CELERY_WORKER_CONCURRENCY = env.int('CELERY_WORKER_CONCURRENCY', default=1)
 
 # Celery 3.1 compatibility
 BROKER_URL = CELERY_BROKER_URL

@@ -6,8 +6,10 @@ services:
     build:
       context: .
       dockerfile: "${VARIANT:-py3}.dockerfile"
+    ports: ['8000']
     environment:
       SECRET_KEY: secret
+      ALLOWED_HOSTS: localhost,127.0.0.1,0.0.0.0
       DATABASE_URL: postgres://mysite:secret@db/mysite
       CELERY_BROKER_URL: amqp://mysite:secret@amqp:5672//mysite
   worker:
