@@ -26,8 +26,6 @@ services:
       POSTGRES_PASSWORD: secret
   amqp:
     image: rabbitmq:management
-    ports:
-      - 15672:15672
     environment:
       RABBITMQ_DEFAULT_VHOST: /mysite
       RABBITMQ_DEFAULT_USER: mysite

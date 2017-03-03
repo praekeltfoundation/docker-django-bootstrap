@@ -25,7 +25,7 @@ before_script:
 script:
   - docker build --tag "$image" --file "$dockerfile" .
   - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" .
-  - ./test.sh "$VARIANT"
+  - (cd example && ./test.sh)
 
 after_script:
   - docker images

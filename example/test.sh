@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-function usage() {
-  echo "Usage: $0 VARIANT"
-  echo "  VARIANT is the type of django-bootstrap image to test"
-}
-
-VARIANT="$1"
-shift || { usage >&2; exit 1; }
+# Set a trap on errors to make it clear when tests have failed
 trap '{ set +x; echo; echo FAILED; echo; } >&2' ERR
 
 function service_ip() {
@@ -16,8 +10,6 @@ function service_ip() {
 }
 
 set -x
-
-cd example
 
 # Bring up the DB and AMQP first
 docker-compose up -d db amqp && sleep 5
