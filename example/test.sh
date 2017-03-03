@@ -50,7 +50,7 @@ docker-compose ps worker | grep 'Up'
 docker-compose ps beat | grep 'Up'
 
 # Check the logs to see if the Celery worker started up successfully
-docker-compose logs worker | ggrep -o 'celery@\w\+ ready'
+docker-compose logs worker | grep -o 'celery@\w\+ ready'
 
 # Check the logs to see if Celery beat started up successfully
 docker-compose logs beat | fgrep 'beat: Starting...'
