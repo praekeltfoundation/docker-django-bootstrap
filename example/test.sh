@@ -38,6 +38,11 @@ curl -fsI http://$WEB_IP:8000/static/admin/img/search.7cf54ff789c6.svg | fgrep '
 # Check that the caching header is *not* set for a file that isn't hashed
 curl -fsI http://$WEB_IP:8000/static/admin/img/search.svg | fgrep -v 'Cache-Control'
 
+# Check tables were created in the database
+[[ $(docker-compose exec --user postgres db \
+  psql -q --dbname mysite -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" \
+    | grep -P '^\s*\d+' | tr -d ' ') > 0 ]]
+
 
 # Celery tests
 # ############
