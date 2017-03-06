@@ -2,6 +2,12 @@ from __future__ import absolute_import
 
 import environ
 
+try:
+    from psycopg2cffi import compat
+    compat.register()
+except ImportError:
+    pass
+
 from .settings import ALLOWED_HOSTS, SECRET_KEY
 from .settings import *  # noqa
 

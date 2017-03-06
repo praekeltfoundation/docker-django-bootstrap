@@ -11,6 +11,7 @@ env:
   matrix:
     - VARIANT=py2
     - VARIANT=py3
+    - VARIANT=pypy2
 
 # Update Docker Engine and Compose
 before_install:
