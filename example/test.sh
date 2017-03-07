@@ -12,7 +12,7 @@ function timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 
 function wait_for_log_line() {
   local service="$1"; shift
-  local log_pattern="$2"; shift
+  local log_pattern="$1"; shift
   timeout "${LOG_TIMEOUT:-10}" grep -m 1 -E "$log_pattern" <(docker-compose logs -f "$service" 2>&1)
 }
 
@@ -21,7 +21,7 @@ set -x
 # Bring up the DB and AMQP first
 docker-compose up -d db amqp
 wait_for_log_line db 'database system is ready to accept connections'
-wait_for_log_line amqp 'The server is now ready to accept connections on port 6379'
+wait_for_log_line amqp 'Server startup complete'
 
 # Bring everything else up
 docker-compose up -d
@@ -54,7 +54,7 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cac
 # Celery tests
 # ############
 # Check the logs to see if the Celery worker started up successfully
-wait_for_log_line worker 'celery@\w\+ ready'
+wait_for_log_line worker 'celery@\w+ ready'
 docker-compose ps worker | grep 'Up'
 
 # Check the logs to see if Celery beat started up successfully
