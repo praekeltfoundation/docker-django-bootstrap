@@ -24,7 +24,7 @@ before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"
   - dockerfile="$VARIANT.dockerfile"
   # Fetch existing image to use as cache
-  - docker pull "$image"-onbuild
+  - docker pull "$image"-onbuild || true
 script:
   - docker build --pull --cache-from "$image"-onbuild --tag "$image" --file "$dockerfile" .
   - docker build --cache-from "$image"-onbuild --tag "$image"-onbuild --file onbuild/"$dockerfile" .
