@@ -7,10 +7,13 @@ trap '{ set +x; echo; echo FAILED; echo; } >&2' ERR
 # Set a trap to bring everything down when we exit
 trap "{ set +x; docker-compose down; }" EXIT
 
+# macOS-compatible timeout function: http://stackoverflow.com/a/35512328
+function timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+
 function wait_for_log_line() {
   local service="$1"; shift
   local log_pattern="$2"; shift
-  timeout "${LOG_TIMEOUT:-10}" grep -m 1 -E "$log_pattern" <(docker-compose logs -f "$service")
+  timeout "${LOG_TIMEOUT:-10}" grep -m 1 -E "$log_pattern" <(docker-compose logs -f "$service" 2>&1)
 }
 
 set -x
