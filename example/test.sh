@@ -4,19 +4,28 @@ set -e
 # Set a trap on errors to make it clear when tests have failed
 trap '{ set +x; echo; echo FAILED; echo; } >&2' ERR
 
-set -x
-
-# Bring up the DB and AMQP first
-docker-compose up -d db amqp && sleep 5
-
-# Bring everything else up
-docker-compose up -d && sleep 5
-
 # Set a trap to bring everything down when we exit
 trap "{ set +x; docker-compose down; }" EXIT
 
+function wait_for_log_line() {
+  local service="$1"; shift
+  local log_pattern="$2"; shift
+  timeout "${LOG_TIMEOUT:-10}" grep -m 1 -E "$log_pattern" <(docker-compose logs -f "$service")
+}
+
+set -x
+
+# Bring up the DB and AMQP first
+docker-compose up -d db amqp
+wait_for_log_line db 'database system is ready to accept connections'
+wait_for_log_line amqp 'The server is now ready to accept connections on port 6379'
+
+# Bring everything else up
+docker-compose up -d
+
 # Django tests
 # ############
+wait_for_log_line web 'Booting worker'
 docker-compose ps web | grep 'Up'
 
 WEB_PORT="$(docker-compose port web 8000 | cut -d':' -f2)"
@@ -41,14 +50,13 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cac
 
 # Celery tests
 # ############
-docker-compose ps worker | grep 'Up'
-docker-compose ps beat | grep 'Up'
-
 # Check the logs to see if the Celery worker started up successfully
-docker-compose logs worker | grep -o 'celery@\w\+ ready'
+wait_for_log_line worker 'celery@\w\+ ready'
+docker-compose ps worker | grep 'Up'
 
 # Check the logs to see if Celery beat started up successfully
-docker-compose logs beat | fgrep 'beat: Starting...'
+wait_for_log_line beat 'beat: Starting\.\.\.'
+docker-compose ps beat | grep 'Up'
 
 # Check a queue was created in RabbitMQ
 docker-compose exec amqp rabbitmqctl list_queues -p /mysite | grep 'celery'
