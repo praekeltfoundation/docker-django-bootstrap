@@ -30,13 +30,11 @@ if [ "$1" = 'celery' ]; then
     set -- "$@" --concurrency "${CELERY_CONCURRENCY:-1}"
   fi
 
-  # Set the schedule file if this is beat
-  if [ "$2" = 'beat' ]; then
-    set -- "$@" --schedule /var/run/celery/celerybeat-schedule
-  fi
-
   # Run under the celery user
   set -- su-exec celery "$@"
+
+  # Change to the Celery working directory (only place the user can write)
+  cd /var/run/celery
 fi
 
 exec "$@"
