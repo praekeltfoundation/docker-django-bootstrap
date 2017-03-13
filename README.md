@@ -1,4 +1,9 @@
 # docker-django-bootstrap
+
+[![Docker Pulls](https://img.shields.io/docker/pulls/praekeltfoundation/django-bootstrap.svg?style=flat-square)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
+[![Travis branch](https://img.shields.io/travis/praekeltfoundation/docker-django-bootstrap/develop.svg?style=flat-square)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
+[![Requires.io](https://img.shields.io/requires/github/praekeltfoundation/docker-django-bootstrap.svg?style=flat-square)](https://requires.io/github/praekeltfoundation/docker-django-bootstrap/requirements/?branch=develop)
+
 Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
