@@ -15,11 +15,11 @@ services:
   worker:
     extends:
       service: web
-    command: [celery, worker, -A, mysite]
+    command: [celery, worker]
   beat:
     extends:
       service: web
-    command: [celery, beat, -A, mysite]
+    command: [celery, beat]
   db:
     image: postgres:alpine
     environment:
