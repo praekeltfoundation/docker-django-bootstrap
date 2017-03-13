@@ -4,5 +4,5 @@ services:
   web:
     # Override (append) these environment variables
     environment:
-      CELERY_APP: mysite
+      CELERY_WORKER: 1
       CELERY_BEAT: 1

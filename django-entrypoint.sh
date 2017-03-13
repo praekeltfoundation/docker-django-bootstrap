@@ -37,14 +37,19 @@ if not User.objects.filter(username='admin').exists():
   nginx -g 'daemon off;' &
 
   # Celery
-  if [ -n "$CELERY_APP" ]; then
-    # Worker
-    celery-entrypoint.sh worker --pidfile /var/run/celery/worker.pid &
+  ensure_celery_app() {
+    [ -n "$CELERY_APP" ] || \
+      { echo 'If $CELERY_WORKER or $CELERY_BEAT are set then $CELERY_APP must be provided'; exit 1; }
+  }
 
-    # Beat
-    if [ -n "$CELERY_BEAT" ]; then
-      celery-entrypoint.sh beat --pidfile /var/run/celery/beat.pid &
-    fi
+  if [ -n "$CELERY_WORKER" ]; then
+    ensure_celery_app
+    celery-entrypoint.sh worker --pidfile /var/run/celery/worker.pid &
+  fi
+
+  if [ -n "$CELERY_BEAT" ]; then
+    ensure_celery_app
+    celery-entrypoint.sh beat --pidfile /var/run/celery/beat.pid &
   fi
 
   if [ -n "$APP_MODULE" ]; then

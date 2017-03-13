@@ -110,14 +110,28 @@ CMD ["worker", \
 ```
 
 ### Option 2: Celery in the same container
-Celery can be enabled alongside Django/Gunicorn by adjusting a set of environment variables. Setting the `CELERY_APP` variable to the Celery app to run will enable a Celery worker process.
+Celery can be enabled alongside Django/Gunicorn by adjusting a set of environment variables. Setting the `CELERY_WORKER` variable to a non-empty value will enable a Celery worker process.
 
 The following environment variables can be used to configure Celery. A number of these can also be configured via the Django project's settings.
 
+#### `CELERY_WORKER`:
+Set this option to any non-empty value (e.g. `1`) to have a [Celery worker](http://docs.celeryproject.org/en/latest/userguide/workers.html)  process run. This requires that `CELERY_APP` is set.
+* Required: no
+* Default: none
+* Celery option: n/a
+
+#### `CELERY_BEAT`:
+Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html) process run. This requires that `CELERY_APP` is set.
+* Required: no
+* Default: none
+* Celery option: n/a
+
 #### `CELERY_APP`:
-* Required: yes
+* Required: yes, if `CELERY_WORKER` or `CELERY_BEAT` is set.
 * Default: none
 * Celery option: `-A`/`--app`
+
+> **NOTE**: The following 3 environment variables are deprecated. They will continue to work but it is recommended that you set these values in your Django settings file, rather.
 
 #### `CELERY_BROKER`:
 * Required: no
@@ -134,12 +148,6 @@ Note that by default Celery runs as many worker processes as there are processor
 * Required: no
 * Default: **1**
 * Celery option: `-c`/`--concurrency`
-
-#### `CELERY_BEAT`:
-Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html) scheduler process run as well.
-* Required: no
-* Default: none
-* Celery option: n/a
 
 ## Other configuration
 ### Gunicorn
