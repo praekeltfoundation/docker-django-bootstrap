@@ -8,11 +8,21 @@ function usage() {
 EXTRA_COMPOSE_FILE=
 WORKER_SERVICE=worker
 BEAT_SERVICE=beat
+# 1. dinit
+# 2. gunicorn master
+# 3. gunicorn worker
+# 4. nginx master
+# 5. nginx worker
+EXPECTED_WEB_PROCESSES=5
 case "$1" in
   -s|--single-container)
     EXTRA_COMPOSE_FILE=docker-compose.single-container.yml
     WORKER_SERVICE=web
     BEAT_SERVICE=web
+    # 6. celery worker master
+    # 7. celery worker ... worker
+    # 8. celery beat
+    EXPECTED_WEB_PROCESSES=8
   ;;
   '') ;;
   *)
@@ -76,6 +86,10 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cac
 
 # Celery tests
 # ############
+# Assert the expected number of processes are running in the web container
+[ "$(compose_cmd exec web ps ax --no-headers | grep -v 'ps ax' | wc -l | tr -d ' ')" \
+  = "$EXPECTED_WEB_PROCESSES" ]
+
 # Celery worker
 [ "$WORKER_SERVICE" = 'web' ] || docker-compose up -d "$WORKER_SERVICE"
 wait_for_log_line "$WORKER_SERVICE" 'celery@\w+ ready'
