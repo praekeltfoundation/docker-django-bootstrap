@@ -2,7 +2,7 @@
 set -e
 
 function usage() {
-	echo "usage: $1 [-s|--single-image]"
+  echo "usage: $1 [-s|--single-image]"
 }
 
 EXTRA_COMPOSE_FILE=
