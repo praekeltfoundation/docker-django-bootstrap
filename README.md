@@ -29,6 +29,7 @@ In the root of the repo for your Django project, add a Dockerfile for the projec
 ```dockerfile
 FROM praekeltfoundation/django-bootstrap:onbuild
 ENV DJANGO_SETTINGS_MODULE my_django_project.settings
+ENV CELERY_APP my_django_project
 RUN django-admin collectstatic --noinput
 CMD ["my_django_project.wsgi:application"]
 ```
@@ -36,8 +37,9 @@ CMD ["my_django_project.wsgi:application"]
 Let's go through these lines one-by-one:
  1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap:onbuild` base image.
  2. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
- 3. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
- 4. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
+ 3. *Optional:* If you are using Celery, setting the `CELERY_APP` environment variable lets Celery know what app instance to use (i.e. you don't have to provide [`--app`](http://docs.celeryproject.org/en/latest/reference/celery.bin.celery.html#cmdoption-celery-a)).
+ 4. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
+ 5. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
 \*Note that previously the way to do this was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
 
@@ -92,27 +94,22 @@ To run a Celery container simply override the container command as described ear
 
 You can override the command in your Dockerfile...
 ```dockerfile
-CMD ["celery", "worker", \
-     "--app", "my_django_project", \
-     "--loglevel", "info"]
+CMD ["celery", "worker"]
 ```
 ...or at runtime:
 ```
-> $ docker run my-django-bootstrap-image celery worker --app my_django_project --loglevel info
+> $ docker run my-django-bootstrap-image celery worker
 ```
 
 You can also create dedicated Celery images by overriding the image entrypoint:
 ```dockerfile
 ENTRYPOINT ["dinit", "celery-entrypoint.sh"]
-CMD ["worker", \
-     "--app", "my_django_project", \
-     "--loglevel", "INFO"]
+CMD ["worker"]
 ```
+The above assume that you have set the `CELERY_APP` environment variable.
 
 ### Option 2: Celery in the same container
-Celery can be enabled alongside Django/Gunicorn by adjusting a set of environment variables. Setting the `CELERY_WORKER` variable to a non-empty value will enable a Celery worker process.
-
-The following environment variables can be used to configure Celery. A number of these can also be configured via the Django project's settings.
+Celery can be run alongside Django/Gunicorn by adjusting a set of environment variables. Setting the `CELERY_WORKER` variable to a non-empty value will enable a Celery worker process. Similarly, setting the `CELERY_BEAT` variable will enable a Celery beat process.
 
 #### `CELERY_WORKER`:
 Set this option to any non-empty value (e.g. `1`) to have a [Celery worker](http://docs.celeryproject.org/en/latest/userguide/workers.html)  process run. This requires that `CELERY_APP` is set.
@@ -126,12 +123,15 @@ Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http:/
 * Default: none
 * Celery option: n/a
 
+### Celery environment variable configuration
+The following environment variables can be used to configure Celery, but, other than the `CELERY_APP` variable, you should configure Celery in your Django settings file. See the example project's [settings file](example/mysite/docker_settings.py) for an example of how to do that.
+
 #### `CELERY_APP`:
 * Required: yes, if `CELERY_WORKER` or `CELERY_BEAT` is set.
 * Default: none
 * Celery option: `-A`/`--app`
 
-> **NOTE**: The following 3 environment variables are deprecated. They will continue to work but it is recommended that you set these values in your Django settings file, rather.
+> **NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.
 
 #### `CELERY_BROKER`:
 * Required: no
