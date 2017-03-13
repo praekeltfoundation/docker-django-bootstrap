@@ -1,19 +1,43 @@
 #!/usr/bin/env bash
 set -e
 
+function usage() {
+	echo "usage: $1 [-s|--single-image]"
+}
+
+EXTRA_COMPOSE_FILE=
+WORKER_SERVICE=worker
+BEAT_SERVICE=beat
+CELERY_APP=
+CELERY_BEAT=
+case "$1" in
+  -s|--single-container)
+    EXTRA_COMPOSE_FILE=docker-compose.single-container.yml
+    WORKER_SERVICE=web
+    BEAT_SERVICE=web
+    CELERY_APP=mysite
+    CELERY_BEAT=1
+  ;;
+  '') ;;
+  *)
+    usage "$0" >&2; exit 1
+  ;;
+esac
+
+export CELERY_APP
+export CELERY_BEAT
+
 # macOS-compatible timeout function: http://stackoverflow.com/a/35512328
 function timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 
 function wait_for_log_line() {
   local service="$1"; shift
   local log_pattern="$1"; shift
-  timeout "${LOG_TIMEOUT:-10}" grep -m 1 -E "$log_pattern" <(docker-compose logs -f "$service" 2>&1)
+  timeout "${LOG_TIMEOUT:-10}" grep -m 1 -E "$log_pattern" <(compose_cmd logs -f "$service" 2>&1)
 }
 
-COMPOSE_FILE="${1:-docker-compose.yml}"
-
 function compose_cmd() {
-  docker-compose -f "$COMPOSE_FILE" "$@"
+  docker-compose -f docker-compose.yml ${EXTRA_COMPOSE_FILE:+-f "$EXTRA_COMPOSE_FILE"} "$@"
 }
 
 # Set a trap on errors to make it clear when tests have failed
@@ -29,8 +53,8 @@ compose_cmd up -d db amqp
 wait_for_log_line db 'database system is ready to accept connections'
 wait_for_log_line amqp 'Server startup complete'
 
-# Bring everything else up
-compose_cmd up -d
+# Bring up the web
+compose_cmd up -d web
 
 # Django tests
 # ############
@@ -59,13 +83,15 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cac
 
 # Celery tests
 # ############
-# Check the logs to see if the Celery worker started up successfully
-wait_for_log_line worker 'celery@\w+ ready'
-compose_cmd ps worker | grep 'Up'
+# Celery worker
+[ "$WORKER_SERVICE" = 'web' ] || docker-compose up -d "$WORKER_SERVICE"
+wait_for_log_line "$WORKER_SERVICE" 'celery@\w+ ready'
+[ "$WORKER_SERVICE" = 'web' ] || compose_cmd ps "$WORKER_SERVICE" | grep 'Up'
 
-# Check the logs to see if Celery beat started up successfully
-wait_for_log_line beat 'beat: Starting\.\.\.'
-compose_cmd ps beat | grep 'Up'
+# Celery beat
+[ "$BEAT_SERVICE" = 'web' ] || docker-compose up -d "$BEAT_SERVICE"
+wait_for_log_line "$BEAT_SERVICE" 'beat: Starting\.\.\.'
+[ "$BEAT_SERVICE" = 'web' ] || compose_cmd ps "$BEAT_SERVICE" | grep 'Up'
 
 # Check a queue was created in RabbitMQ
 compose_cmd exec amqp rabbitmqctl list_queues -p /mysite | grep 'celery'
