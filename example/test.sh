@@ -8,24 +8,17 @@ function usage() {
 EXTRA_COMPOSE_FILE=
 WORKER_SERVICE=worker
 BEAT_SERVICE=beat
-CELERY_APP=
-CELERY_BEAT=
 case "$1" in
   -s|--single-container)
     EXTRA_COMPOSE_FILE=docker-compose.single-container.yml
     WORKER_SERVICE=web
     BEAT_SERVICE=web
-    CELERY_APP=mysite
-    CELERY_BEAT=1
   ;;
   '') ;;
   *)
     usage "$0" >&2; exit 1
   ;;
 esac
-
-export CELERY_APP
-export CELERY_BEAT
 
 # macOS-compatible timeout function: http://stackoverflow.com/a/35512328
 function timeout() { perl -e 'alarm shift; exec @ARGV' "$@"; }
