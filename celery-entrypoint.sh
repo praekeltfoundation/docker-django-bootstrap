@@ -21,7 +21,6 @@ fi
 if [ "$1" = 'celery' ]; then
   # Set some common options if the env vars are set
   set -- "$@" \
-      ${CELERY_APP:+--app "$CELERY_APP"} \
       ${CELERY_BROKER:+--broker "$CELERY_BROKER"} \
       ${CELERY_LOGLEVEL:+--loglevel "$CELERY_LOGLEVEL"}
 
