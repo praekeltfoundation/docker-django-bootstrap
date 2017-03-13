@@ -28,6 +28,7 @@ script:
   - docker build --pull --cache-from "$image"-onbuild --tag "$image" --file "$dockerfile" .
   - docker build --cache-from "$image"-onbuild --tag "$image"-onbuild --file onbuild/"$dockerfile" .
   - (cd example && ./test.sh)
+  - (cd example && ./test.sh --single-container)
 
 after_script:
   - docker images
