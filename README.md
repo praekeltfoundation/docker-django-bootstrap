@@ -40,6 +40,9 @@ If your project makes use of user-uploaded media files, it must be set up as fol
 
 ***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory (`/app`) will be served by Nginx. Do not store anything here that you do not want the world to see.
 
+**Django settings file**
+You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](example/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
+
 #### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
