@@ -11,25 +11,39 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 > **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tags (`:latest` and `:onbuild`) will remain Debian/Python 2-based as they have always been.
 
 ## Usage
-#### Step 0: Get your Django project in shape
+#### Step 1: Get your Django project in shape
 There are a few ways that your Django project needs to be set up in order to be compatible with this Docker image.
 
 **setup.py**  
-Your project must have a `setup.py`. All dependencies (including Django itself) need to be listed as `install_requires`.
+Your project must have a [`setup.py`](https://packaging.python.org/distributing/#setup-py). All dependencies need to be listed in the [`install_requires`](https://packaging.python.org/distributing/#install-requires).
+
+Your dependencies should include at least:
+* `Django`
+* `celery` (if using)
+* ...but **not** `gunicorn`
+
+Django *isn't* installed in this image as different projects may use different versions of Django. Celery is completely optional.
+
+Gunicorn is the only Python package installed in this image. It is kept up-to-date and tested here so you should not be pinning the `gunicorn` package in your application. Gunicorn is considered a deployment detail and your Django project should not rely on its use.
 
 **Static files**  
-Your project's [static files](https://docs.djangoproject.com/en/1.9/howto/static-files/) must be set up as follows:
+Your project's [static files](https://docs.djangoproject.com/en/1.10/howto/static-files/) must be set up as follows in your Django settings:
 * `STATIC_URL = '/static/'`
-* `STATIC_ROOT` = `BASE_DIR/static` or `BASE_DIR/staticfiles`
+* `STATIC_ROOT` = `'static'` (relative) or `'/app/static'` (absolute)
 
 **Media files**  
 If your project makes use of user-uploaded media files, it must be set up as follows:
 * `MEDIA_URL = '/media/'`
-* `MEDIA_ROOT` = `BASE_DIR/media` or `BASE_DIR/mediafiles`
+* `MEDIA_ROOT` = `'media'` (relative) or `'/app/media'` (absolute)
 
-***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory will be served by Nginx. Do not store anything here that you do not want the world to see.
+> The `staticfiles` and `mediafiles` directories are also used for serving static and media files, but this is deprecated.
 
-#### Step 1: Write a Dockerfile
+***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory (`/app`) will be served by Nginx. Do not store anything here that you do not want the world to see.
+
+**Django settings file**
+You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](example/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
+
+#### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
 FROM praekeltfoundation/django-bootstrap:onbuild
@@ -46,7 +60,7 @@ Let's go through these lines one-by-one:
  4. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
  5. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
-\*Note that previously the way to do this was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
+> Note that previously the way to do point 5 was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
 
 The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
  1. `COPY . /app` - copies the source of your project into the image
@@ -58,7 +72,7 @@ By default, the [`django-entrypoint.sh`](django-entrypoint.sh) script is run whe
 
 The script also allows you to create a Django super user account if needed. Setting the `SUPERUSER_PASSWORD` environment variable will result in a Django superuser account being made with the `admin` username. This will only happen if no `admin` user exists.
 
-#### Step 2: Add a `.dockerignore` file (if using the `:onbuild` image)
+#### Step 3: Add a `.dockerignore` file (if using the `:onbuild` image)
 Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](example/.dockerignore) from the example Django project in this repo.
 
 The `:onbuild` image automatically copies in the entire source of your project, but some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
