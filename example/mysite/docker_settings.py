@@ -20,8 +20,11 @@ DEBUG = env.bool('DEBUG', default=False)
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=ALLOWED_HOSTS)
 
 DATABASES = {
-    # Set up the database using a "database URL". See dj-database-url for more:
-    # https://github.com/kennethreitz/dj-database-url
+    # django-environ builds in the functionality of dj-database-url
+    # (https://github.com/kennethreitz/dj-database-url). This allows you to
+    # fully configure the database connection using a single environment
+    # variable that defines a 'database URL', for example:
+    # `DATABASE_URL=postgres://username:password@db-host/db-name`
     'default': env.db(default='sqlite:///db.sqlite3')
 }
 
