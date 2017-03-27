@@ -5,14 +5,15 @@
 
 from __future__ import absolute_import
 
+# We use django-environ here to make working with environment variables a bit
+# easier: https://github.com/joke2k/django-environ. To use this, you'll need to
+# add 'django-environ' to your install_requires.
 import environ
 
 # Import the existing settings file, we'll work from there...
 from .settings import ALLOWED_HOSTS, SECRET_KEY
 from .settings import *  # noqa
 
-# We use django-environ here to make working with environment variables a bit
-# easier: https://github.com/joke2k/django-environ
 env = environ.Env()
 
 SECRET_KEY = env.str('SECRET_KEY', default=SECRET_KEY)
