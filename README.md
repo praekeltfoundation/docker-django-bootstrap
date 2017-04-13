@@ -142,6 +142,10 @@ Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http:/
 * Default: none
 * Celery option: n/a
 
+Note that when running a Celery worker in this way, the process pool implementation used is the ['solo' pool](http://docs.celeryproject.org/en/latest/internals/reference/celery.concurrency.solo.html). This means that instead of a pair of processes (master/worker) for the Celery worker, there is just one process. This saves on resources.
+
+The worker is always single-process (the `--concurrency` option is ignored) and is **blocking**. A number of worker configuration options can't be used with this pool implementation. See the [worker guide](http://docs.celeryproject.org/en/latest/userguide/workers.html) in the Celery documentation for more information.
+
 ### Celery environment variable configuration
 The following environment variables can be used to configure Celery, but, other than the `CELERY_APP` variable, you should configure Celery in your Django settings file. See the example project's [settings file](example/mysite/docker_settings.py) for an example of how to do that.
 
