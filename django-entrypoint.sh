@@ -62,12 +62,10 @@ if not User.objects.filter(username='admin').exists():
 
   # umask working files (worker tmp files & unix socket) as 0o117 (i.e. chmod as
   # 0o660) so that they are only read/writable by gunicorn and nginx users.
-  # FIXME: Have to specify umask as decimal, not octal (0o117 = 79):
-  # https://github.com/benoitc/gunicorn/issues/1325
-  set -- "$@" \
+  set -- su-exec gunicorn "$@" \
     --pid /var/run/gunicorn/gunicorn.pid \
-    --user gunicorn --group gunicorn --umask 79 \
     --bind unix:/var/run/gunicorn/gunicorn.sock \
+    --umask 0117 \
     ${GUNICORN_ACCESS_LOGS:+--access-logfile -}
 fi
 
