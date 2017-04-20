@@ -19,10 +19,9 @@ case "$1" in
     EXTRA_COMPOSE_FILE=docker-compose.single-container.yml
     WORKER_SERVICE=web
     BEAT_SERVICE=web
-    # 6. celery worker master
-    # 7. celery worker ... worker
-    # 8. celery beat
-    EXPECTED_WEB_PROCESSES=8
+    # 6. celery worker
+    # 7. celery beat
+    EXPECTED_WEB_PROCESSES=7
   ;;
   '') ;;
   *)
