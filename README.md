@@ -196,3 +196,5 @@ Nginx is set up with mostly default config:
 Generally you shouldn't need to adjust Nginx's settings. If you do, the configuration files of interest are at:
 * `/etc/nginx/nginx.conf`: Main configuration
 * `/etc/nginx/conf.d/django.conf`: Proxy configuration
+
+We make a few adjustments to Nginx's default configuration to better work with Gunicorn. See the [config file](nginx/conf.d/django.conf) for all the details. One important point is that we consider the `X-Forwarded-Proto` header, when set to the value of `https`, as an indicator that the client connection was made over HTTPS and is secure. Gunicorn considers a few more headers for this purpose, `X-Forwarded-Protocol` and `X-Forwarded-Ssl`, but our Nginx config is set to remove those headers to prevent misuse.
