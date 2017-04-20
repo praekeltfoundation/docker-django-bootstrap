@@ -65,7 +65,7 @@ if not User.objects.filter(username='admin').exists():
   set -- su-exec gunicorn "$@" \
     --pid /var/run/gunicorn/gunicorn.pid \
     --bind unix:/var/run/gunicorn/gunicorn.sock \
-    --umask 0o117 \
+    --umask 0117 \
     ${GUNICORN_ACCESS_LOGS:+--access-logfile -}
 fi
 
