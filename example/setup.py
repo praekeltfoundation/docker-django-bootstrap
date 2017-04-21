@@ -7,8 +7,8 @@ setup(
     author_email='sre@praekelt.org',
     packages=find_packages(),
     install_requires=[
-        'celery >=3.1, <4.0',
-        'Django >=1.10, <1.11',
+        'celery >=4.0, <4.1',
+        'Django >=1.11, <1.12',
         'django-environ',
         'psycopg2 >=2.7',
     ],
