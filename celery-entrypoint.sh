@@ -42,9 +42,11 @@ if [ "$1" = 'celery' ]; then
   fi
 
   # Run under the celery user
-  set -- su-exec celery "$@"
+  set -- su-exec django "$@"
 
-  # Change to the Celery working directory (only place the user can write)
+  # Celery by default writes files like pidfiles and the beat schedule file to
+  # the current working directory. Change to the Celery working directory so
+  # that these files end up there.
   cd /var/run/celery
 fi
 

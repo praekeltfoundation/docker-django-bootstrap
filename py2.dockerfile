@@ -1,15 +1,14 @@
 FROM praekeltfoundation/python-base:2.7
 
-# Create the users and working directories first as they shouldn't change often
-RUN addgroup --system gunicorn \
-    && adduser --system --ingroup gunicorn gunicorn \
-    && mkdir /var/run/gunicorn \
-    && chown gunicorn:gunicorn /var/run/gunicorn
-
-RUN addgroup --system celery \
-    && adduser --system --ingroup celery celery \
-    && mkdir /var/run/celery \
-    && chown celery:celery /var/run/celery
+# Create the user and working directories first as they shouldn't change often.
+# Specify the UID/GIDs so that they do not change somehow and mess with the
+# ownership of external volumes.
+RUN set -ex; \
+    addgroup --system --gid 107 django; \
+    adduser --system --uid 104 --ingroup django django; \
+    \
+    mkdir /var/run/gunicorn /var/run/celery; \
+    chown django:django /var/run/gunicorn /var/run/celery
 
 # Install libpq for psycopg2 for PostgreSQL support
 RUN apt-get-install.sh libpq5
@@ -20,8 +19,8 @@ RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC64107
     && echo 'deb http://nginx.org/packages/debian/ jessie nginx' > /etc/apt/sources.list.d/nginx.list \
     && apt-get-install.sh "nginx=$NGINX_VERSION" \
     && rm /etc/nginx/conf.d/default.conf \
-# Add nginx user to gunicorn group so that Nginx can read/write to gunicorn socket
-    && adduser nginx gunicorn
+# Add nginx user to django group so that Nginx can read/write to gunicorn socket
+    && adduser nginx django
 COPY nginx/ /etc/nginx/
 
 # Install gunicorn
