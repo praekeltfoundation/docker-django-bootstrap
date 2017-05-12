@@ -42,6 +42,13 @@ function compose_cmd() {
   docker-compose -f docker-compose.yml ${EXTRA_COMPOSE_FILE:+-f "$EXTRA_COMPOSE_FILE"} "$@"
 }
 
+function assert_single_root_process() {
+  # Assert that a container has only one root process (dumb-init)
+  local service="$1"; shift
+  [ "$(compose_cmd exec "$service" ps aux --no-headers | grep -v 'ps aux' | grep 'root' | wc -l | tr -d ' ')"
+    = '1' ]
+}
+
 # Set a trap on errors to make it clear when tests have failed
 trap '{ set +x; echo; echo FAILED; echo; } >&2' ERR
 
@@ -83,21 +90,24 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cac
     | grep -E '^\s*[[:digit:]]+' | tr -d ' ') > 0 ]]
 
 
+# Assert the expected number of processes are running in the web container
+[ "$(compose_cmd exec web ps ax --no-headers | grep -v 'ps ax' | wc -l | tr -d' ')" \
+  = "$EXPECTED_WEB_PROCESSES" ]
+assert_single_root_process web
+
 # Celery tests
 # ############
-# Assert the expected number of processes are running in the web container
-[ "$(compose_cmd exec web ps ax --no-headers | grep -v 'ps ax' | wc -l | tr -d ' ')" \
-  = "$EXPECTED_WEB_PROCESSES" ]
-
 # Celery worker
 [ "$WORKER_SERVICE" = 'web' ] || docker-compose up -d "$WORKER_SERVICE"
 wait_for_log_line "$WORKER_SERVICE" 'celery@\w+ ready'
 [ "$WORKER_SERVICE" = 'web' ] || compose_cmd ps "$WORKER_SERVICE" | grep 'Up'
+[ "$WORKER_SERVICE" = 'web' ] || assert_single_root_process "$WORKER_SERVICE"
 
 # Celery beat
 [ "$BEAT_SERVICE" = 'web' ] || docker-compose up -d "$BEAT_SERVICE"
 wait_for_log_line "$BEAT_SERVICE" 'beat: Starting\.\.\.'
 [ "$BEAT_SERVICE" = 'web' ] || compose_cmd ps "$BEAT_SERVICE" | grep 'Up'
+[ "$BEAT_SERVICE" = 'web' ] || assert_single_root_process "$BEAT_SERVICE"
 
 # Check a queue was created in RabbitMQ
 compose_cmd exec amqp rabbitmqctl list_queues -p /mysite | grep 'celery'
