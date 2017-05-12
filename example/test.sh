@@ -92,7 +92,7 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cac
 
 
 # Assert the expected number of processes are running in the web container
-[ "$(compose_cmd exec web ps ax --no-headers | grep -v 'ps ax' | wc -l | tr -d' ')" \
+[ "$(compose_cmd exec web ps ax --no-headers | grep -v 'ps ax' | wc -l | tr -d ' ')" \
   = "$EXPECTED_WEB_PROCESSES" ]
 # Assert there are 2 root user processes: dumb-init and the nginx master
 assert_number_root_processes web 2
