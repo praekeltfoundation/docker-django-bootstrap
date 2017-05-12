@@ -46,7 +46,7 @@ function assert_number_root_processes() {
   # Assert that a container has only one root process (dumb-init)
   local service="$1"; shift
   local processes="$1"; shift
-  [ "$(compose_cmd exec "$service" ps aux --no-headers | grep -v 'ps aux' | grep 'root' | wc -l | tr -d ' ')"
+  [ "$(compose_cmd exec "$service" ps aux --no-headers | grep -v 'ps aux' | grep 'root' | wc -l | tr -d ' ')" \
     = "$processes" ]
 }
 
