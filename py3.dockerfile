@@ -3,7 +3,7 @@ FROM praekeltfoundation/python-base:3.6
 # Create the user and working directories first as they shouldn't change often.
 # Specify the UID/GIDs so that they do not change somehow and mess with the
 # ownership of external volumes.
-RUN set -ex;
+RUN set -ex; \
     addgroup --system --gid 107 django; \
     adduser --system --uid 104 --ingroup django django; \
     \
