@@ -86,14 +86,14 @@ curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.7cf54ff789c6.svg | 
 curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cache-Control'
 
 # Check that if we say we support gzip, then Nginx gives us that
-curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/css/base.css \
-  | fgrep -e 'Content-Encoding: gzip' \
-          -e 'Vary: Content-Encoding'
+GZIP_RESPONSE="$(curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/css/base.css)"
+fgrep 'Content-Encoding: gzip' <<< "$GZIP_RESPONSE"
+fgrep 'Vary: Accept-Encoding' <<< "$GZIP_RESPONSE"
 
 # Check that if we fetch a filetype that shouldn't be gzipped, then it isn't
-curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/fonts/Roboto-Light-webfont.woff \
-  | fgrep -v 'Content-Encoding: gzip' \
-  | fgrep 'Content-Type: application/font-woff'
+NO_GZIP_RESPONSE="$(curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/fonts/Roboto-Light-webfont.woff)"
+! fgrep 'Content-Encoding: gzip' <<< "$NO_GZIP_RESPONSE"
+fgrep 'Content-Type: application/font-woff' <<< "$NO_GZIP_RESPONSE"
 
 
 # Check tables were created in the database
