@@ -25,7 +25,7 @@ before_script:
   # Fetch existing image to use as cache
   - docker pull "$image"
 script:
-  - docker build --pull --cache-from "$image"-onbuild --tag "$image" --file "$dockerfile" .
+  - docker build --pull --cache-from "$image" --tag "$image" --file "$dockerfile" .
   - (cd example && ./test.sh)
   - (cd example && ./test.sh --single-container)
 
