@@ -23,10 +23,9 @@ before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"
   - dockerfile="$VARIANT.dockerfile"
   # Fetch existing image to use as cache
-  - docker pull "$image"-onbuild
+  - docker pull "$image"
 script:
   - docker build --pull --cache-from "$image"-onbuild --tag "$image" --file "$dockerfile" .
-  - docker build --cache-from "$image"-onbuild --tag "$image"-onbuild --file onbuild/"$dockerfile" .
   - (cd example && ./test.sh)
   - (cd example && ./test.sh --single-container)
 
@@ -37,6 +36,6 @@ before_deploy:
   - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
 deploy:
   provider: script
-  script: ./deploy.sh "$image" "$image-onbuild" --default "$DEFAULT_VARIANT"
+  script: ./deploy.sh "$image" --default "$DEFAULT_VARIANT"
   on:
     branch: develop
