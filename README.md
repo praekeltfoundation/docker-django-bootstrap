@@ -60,7 +60,7 @@ Let's go through these lines one-by-one:
  4. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
  5. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
-> Note that previously the way to do point 5 was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
+> Note that previously the way to do point 5 was to set the `APP_MODULE` environment variable. This functionality has been removed.
 
 The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
  1. `COPY . /app` - copies the source of your project into the image
