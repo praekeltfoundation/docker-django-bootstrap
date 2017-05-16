@@ -1,7 +1,7 @@
 sudo: required
 services:
   - docker
-language: bash
+language: python
 
 env:
   global:
@@ -12,27 +12,23 @@ env:
     - VARIANT=py2
     - VARIANT=py3
 
-# Update Docker Engine
+# Update Docker Engine and Compose
 before_install:
   - sudo apt-get update
   - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
+  - pip install --upgrade docker-compose
+install: []
 
 before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"
   - dockerfile="$VARIANT.dockerfile"
+  # Fetch existing image to use as cache
+  - docker pull "$image"-onbuild
 script:
-  - docker build --tag "$image" --file "$dockerfile" .
-  - docker build --tag "$image"-onbuild --file onbuild/"$dockerfile" onbuild
-  - ./test.sh "$VARIANT"
-  # FIXME: This is a quick hack
-  - docker build --tag "$image"-prometheus --file prometheus/"$dockerfile" prometheus
-  - container="$(docker run -d -p 8000:8000 -p 9145:9145 "$image"-prometheus nginx -g 'daemon off;')" && sleep 5
-  # Make 2 requests: one 502, one 200
-  - curl localhost:8000/foo && curl localhost:9145/metrics
-  - metrics="$(curl localhost:9145/metrics)"
-  - echo "$metrics" | fgrep 'nginx_http_requests_total{host="localhost",status="200"} 1'
-  - echo "$metrics" | fgrep 'nginx_http_requests_total{host="localhost",status="502"} 1'
-  - docker stop "$container" && docker rm "$container"
+  - docker build --pull --cache-from "$image"-onbuild --tag "$image" --file "$dockerfile" .
+  - docker build --cache-from "$image"-onbuild --tag "$image"-onbuild --file onbuild/"$dockerfile" .
+  - (cd example && ./test.sh)
+  - (cd example && ./test.sh --single-container)
 
 after_script:
   - docker images
