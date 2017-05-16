@@ -1,4 +1,9 @@
 # docker-django-bootstrap
+
+[![Docker Pulls](https://img.shields.io/docker/pulls/praekeltfoundation/django-bootstrap.svg?style=flat-square)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
+[![Travis branch](https://img.shields.io/travis/praekeltfoundation/docker-django-bootstrap/develop.svg?style=flat-square)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
+[![Requires.io](https://img.shields.io/requires/github/praekeltfoundation/docker-django-bootstrap.svg?style=flat-square)](https://requires.io/github/praekeltfoundation/docker-django-bootstrap/requirements/?branch=develop)
+
 Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
@@ -6,29 +11,44 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 > **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tags (`:latest` and `:onbuild`) will remain Debian/Python 2-based as they have always been.
 
 ## Usage
-#### Step 0: Get your Django project in shape
+#### Step 1: Get your Django project in shape
 There are a few ways that your Django project needs to be set up in order to be compatible with this Docker image.
 
 **setup.py**  
-Your project must have a `setup.py`. All dependencies (including Django itself) need to be listed as `install_requires`.
+Your project must have a [`setup.py`](https://packaging.python.org/distributing/#setup-py). All dependencies need to be listed in the [`install_requires`](https://packaging.python.org/distributing/#install-requires).
+
+Your dependencies should include at least:
+* `Django`
+* `celery` (if using)
+* ...but **not** `gunicorn`
+
+Django *isn't* installed in this image as different projects may use different versions of Django. Celery is completely optional.
+
+Gunicorn is the only Python package installed in this image. It is kept up-to-date and tested here so you should not be pinning the `gunicorn` package in your application. Gunicorn is considered a deployment detail and your Django project should not rely on its use.
 
 **Static files**  
-Your project's [static files](https://docs.djangoproject.com/en/1.9/howto/static-files/) must be set up as follows:
+Your project's [static files](https://docs.djangoproject.com/en/1.10/howto/static-files/) must be set up as follows in your Django settings:
 * `STATIC_URL = '/static/'`
-* `STATIC_ROOT` = `BASE_DIR/static` or `BASE_DIR/staticfiles`
+* `STATIC_ROOT` = `'static'` (relative) or `'/app/static'` (absolute)
 
 **Media files**  
 If your project makes use of user-uploaded media files, it must be set up as follows:
 * `MEDIA_URL = '/media/'`
-* `MEDIA_ROOT` = `BASE_DIR/media` or `BASE_DIR/mediafiles`
+* `MEDIA_ROOT` = `'media'` (relative) or `'/app/media'` (absolute)
 
-***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory will be served by Nginx. Do not store anything here that you do not want the world to see.
+> The `staticfiles` and `mediafiles` directories are also used for serving static and media files, but this is deprecated.
 
-#### Step 1: Write a Dockerfile
+***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory (`/app`) will be served by Nginx. Do not store anything here that you do not want the world to see.
+
+**Django settings file**
+You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](example/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
+
+#### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
 FROM praekeltfoundation/django-bootstrap:onbuild
 ENV DJANGO_SETTINGS_MODULE my_django_project.settings
+ENV CELERY_APP my_django_project
 RUN django-admin collectstatic --noinput
 CMD ["my_django_project.wsgi:application"]
 ```
@@ -36,14 +56,15 @@ CMD ["my_django_project.wsgi:application"]
 Let's go through these lines one-by-one:
  1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap:onbuild` base image.
  2. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
- 3. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
- 4. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
+ 3. *Optional:* If you are using Celery, setting the `CELERY_APP` environment variable lets Celery know what app instance to use (i.e. you don't have to provide [`--app`](http://docs.celeryproject.org/en/latest/reference/celery.bin.celery.html#cmdoption-celery-a)).
+ 4. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
+ 5. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
-\*Note that previously the way to do this was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
+> Note that previously the way to do point 5 was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
 
 The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
  1. `COPY . /app` - copies the source of your project into the image
- 2. `RUN chown -R gunicorn:gunicorn /app` - ensures the `gunicorn` user can write to `/app` and its subdirectories
+ 2. `RUN chown -R django:django /app` - ensures the `django` user can write to `/app` and its subdirectories
  3. `RUN pip install -e .` - installs your project using `pip`
 All these instructions occur directly after the `FROM` instruction in your Dockerfile. Running these `ONBUILD` steps is *optional*. If you don't want them, you can use the plain `praekeltfoundation/django-bootstrap` image.
 
@@ -51,7 +72,7 @@ By default, the [`django-entrypoint.sh`](django-entrypoint.sh) script is run whe
 
 The script also allows you to create a Django super user account if needed. Setting the `SUPERUSER_PASSWORD` environment variable will result in a Django superuser account being made with the `admin` username. This will only happen if no `admin` user exists.
 
-#### Step 2: Add a `.dockerignore` file (if using the `:onbuild` image)
+#### Step 3: Add a `.dockerignore` file (if using the `:onbuild` image)
 Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](example/.dockerignore) from the example Django project in this repo.
 
 The `:onbuild` image automatically copies in the entire source of your project, but some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
@@ -92,32 +113,48 @@ To run a Celery container simply override the container command as described ear
 
 You can override the command in your Dockerfile...
 ```dockerfile
-CMD ["celery", "worker", \
-     "--app", "my_django_project", \
-     "--loglevel", "info"]
+CMD ["celery", "worker"]
 ```
 ...or at runtime:
 ```
-> $ docker run my-django-bootstrap-image celery worker --app my_django_project --loglevel info
+> $ docker run my-django-bootstrap-image celery worker
 ```
 
 You can also create dedicated Celery images by overriding the image entrypoint:
 ```dockerfile
 ENTRYPOINT ["dinit", "celery-entrypoint.sh"]
-CMD ["worker", \
-     "--app", "my_django_project", \
-     "--loglevel", "INFO"]
+CMD ["worker"]
 ```
+The above assume that you have set the `CELERY_APP` environment variable.
 
 ### Option 2: Celery in the same container
-Celery can be enabled alongside Django/Gunicorn by adjusting a set of environment variables. Setting the `CELERY_APP` variable to the Celery app to run will enable a Celery worker process.
+Celery can be run alongside Django/Gunicorn by adjusting a set of environment variables. Setting the `CELERY_WORKER` variable to a non-empty value will enable a Celery worker process. Similarly, setting the `CELERY_BEAT` variable will enable a Celery beat process.
 
-The following environment variables can be used to configure Celery. A number of these can also be configured via the Django project's settings.
+#### `CELERY_WORKER`:
+Set this option to any non-empty value (e.g. `1`) to have a [Celery worker](http://docs.celeryproject.org/en/latest/userguide/workers.html)  process run. This requires that `CELERY_APP` is set.
+* Required: no
+* Default: none
+* Celery option: n/a
+
+#### `CELERY_BEAT`:
+Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html) process run. This requires that `CELERY_APP` is set.
+* Required: no
+* Default: none
+* Celery option: n/a
+
+Note that when running a Celery worker in this way, the process pool implementation used is the ['solo' pool](http://docs.celeryproject.org/en/latest/internals/reference/celery.concurrency.solo.html). This means that instead of a pair of processes (master/worker) for the Celery worker, there is just one process. This saves on resources.
+
+The worker is always single-process (the `--concurrency` option is ignored) and is **blocking**. A number of worker configuration options can't be used with this pool implementation. See the [worker guide](http://docs.celeryproject.org/en/latest/userguide/workers.html) in the Celery documentation for more information.
+
+### Celery environment variable configuration
+The following environment variables can be used to configure Celery, but, other than the `CELERY_APP` variable, you should configure Celery in your Django settings file. See the example project's [settings file](example/mysite/docker_settings.py) for an example of how to do that.
 
 #### `CELERY_APP`:
-* Required: yes
+* Required: yes, if `CELERY_WORKER` or `CELERY_BEAT` is set.
 * Default: none
 * Celery option: `-A`/`--app`
+
+> **NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.
 
 #### `CELERY_BROKER`:
 * Required: no
@@ -135,16 +172,10 @@ Note that by default Celery runs as many worker processes as there are processor
 * Default: **1**
 * Celery option: `-c`/`--concurrency`
 
-#### `CELERY_BEAT`:
-Set this option to any non-empty value (e.g. `1`) to have a [Celery beat](http://docs.celeryproject.org/en/latest/userguide/periodic-tasks.html) scheduler process run as well.
-* Required: no
-* Default: none
-* Celery option: n/a
-
 ## Other configuration
 ### Gunicorn
 Gunicorn is run with some basic configuration:
-* Starts workers under the `gunicorn` user and group
+* Starts workers under the `django` user and group
 * Listens on a Unix socket at `/var/run/gunicorn/gunicorn.sock`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
 
@@ -165,3 +196,5 @@ Nginx is set up with mostly default config:
 Generally you shouldn't need to adjust Nginx's settings. If you do, the configuration files of interest are at:
 * `/etc/nginx/nginx.conf`: Main configuration
 * `/etc/nginx/conf.d/django.conf`: Proxy configuration
+
+We make a few adjustments to Nginx's default configuration to better work with Gunicorn. See the [config file](nginx/conf.d/django.conf) for all the details. One important point is that we consider the `X-Forwarded-Proto` header, when set to the value of `https`, as an indicator that the client connection was made over HTTPS and is secure. Gunicorn considers a few more headers for this purpose, `X-Forwarded-Protocol` and `X-Forwarded-Ssl`, but our Nginx config is set to remove those headers to prevent misuse.
