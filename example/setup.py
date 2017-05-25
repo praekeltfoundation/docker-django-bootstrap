@@ -9,6 +9,7 @@ setup(
     install_requires=[
         'celery >=4.0, <4.1',
         'Django >=1.11, <1.12',
+        'django_compressor >=2.1',
         'django-environ',
         'psycopg2 >=2.7',
     ],

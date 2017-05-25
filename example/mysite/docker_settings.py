@@ -32,11 +32,11 @@ DATABASES = {
 # Set up static file storage as described in the README
 STATIC_ROOT = '/app/static'
 STATIC_URL = '/static/'
-# Using CachedStaticFilesStorage results in a larger Docker image but means
+# Using ManifestStaticFilesStorage results in a larger Docker image but means
 # that Nginx can set long 'expires' headers for the files.
 # https://github.com/praekeltfoundation/docker-django-bootstrap/pull/11
 STATICFILES_STORAGE = (
-    'django.contrib.staticfiles.storage.CachedStaticFilesStorage')
+    'django.contrib.staticfiles.storage.ManifestStaticFilesStorage')
 
 MEDIA_ROOT = '/app/media'
 MEDIA_URL = '/media/'

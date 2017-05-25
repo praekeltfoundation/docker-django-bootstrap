@@ -80,10 +80,22 @@ curl -fsL http://localhost:$WEB_PORT/admin | fgrep '<title>Log in | Django site 
 curl -fsL http://localhost:$WEB_PORT/static/admin/css/base.css | fgrep 'DJANGO Admin styles'
 
 # Check that the caching header is set for a hashed file
-curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.7cf54ff789c6.svg | fgrep 'Cache-Control: max-age=315360000'
+curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.7cf54ff789c6.svg \
+  | fgrep 'Cache-Control: max-age=315360000, public, immutable'
 
-# Check that the caching header is *not* set for a file that isn't hashed
-curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cache-Control'
+# Check that a compressed JavaScript file has the correct Cache-Control header
+COMPRESSED_JS_FILE="$(compose_cmd exec web find static/CACHE/js -name '*.js' | head -1 | tr -d '\r')"
+curl -fsI http://localhost:$WEB_PORT/$COMPRESSED_JS_FILE \
+  | fgrep 'Cache-Control: max-age=315360000, public, immutable'
+
+# Check the same for a compressed CSS file
+COMPRESSED_CSS_FILE="$(compose_cmd exec web find static/CACHE/css -name '*.css' | head -1 | tr -d '\r')"
+curl -fsI http://localhost:$WEB_PORT/$COMPRESSED_CSS_FILE \
+  | fgrep 'Cache-Control: max-age=315360000, public, immutable'
+
+# Check that the caching header is set to the default for a non-hashed file
+curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg \
+  | fgrep 'Cache-Control: max-age=60, public'
 
 # Check tables were created in the database
 [[ $(compose_cmd exec --user postgres db \
