@@ -100,6 +100,17 @@ curl -fsI http://localhost:$WEB_PORT/$COMPRESSED_CSS_FILE \
 curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg \
   | fgrep 'Cache-Control: max-age=60, public'
 
+# Check that if we say we support gzip, then Nginx gives us that
+GZIP_RESPONSE="$(curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/css/base.css)"
+fgrep 'Content-Encoding: gzip' <<< "$GZIP_RESPONSE"
+fgrep 'Vary: Accept-Encoding' <<< "$GZIP_RESPONSE"
+
+# Check that if we fetch a filetype that shouldn't be gzipped, then it isn't
+NO_GZIP_RESPONSE="$(curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/fonts/Roboto-Light-webfont.woff)"
+! fgrep 'Content-Encoding: gzip' <<< "$NO_GZIP_RESPONSE"
+fgrep 'Content-Type: application/font-woff' <<< "$NO_GZIP_RESPONSE"
+
+
 # Check tables were created in the database
 [[ $(compose_cmd exec --user postgres db \
   psql -q --dbname mysite -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" \
