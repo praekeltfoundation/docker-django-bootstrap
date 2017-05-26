@@ -74,7 +74,7 @@ compose_cmd ps web | grep 'Up'
 WEB_PORT="$(compose_cmd port web 8000 | cut -d':' -f2)"
 
 # Simple check to see if the site is up
-curl -fsL http://localhost:$WEB_PORT/admin | fgrep '<title>Log in | Django site admin</title>'
+curl -fsL http://localhost:$WEB_PORT/admin/ | fgrep '<title>Log in | Django site admin</title>'
 
 # Check our Nginx access logs work and are valid JSON
 compose_cmd logs web | grep -m 1 -o -E '\{ "time": .+' | jq .
