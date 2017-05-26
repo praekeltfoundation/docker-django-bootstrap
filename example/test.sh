@@ -74,16 +74,31 @@ compose_cmd ps web | grep 'Up'
 WEB_PORT="$(compose_cmd port web 8000 | cut -d':' -f2)"
 
 # Simple check to see if the site is up
-curl -fsL http://localhost:$WEB_PORT/admin | fgrep '<title>Log in | Django site admin</title>'
+curl -fsL http://localhost:$WEB_PORT/admin/ | fgrep '<title>Log in | Django site admin</title>'
+
+# Check our Nginx access logs work and are valid JSON
+compose_cmd logs web | grep -m 1 -o -E '\{ "time": .+' | jq .
 
 # Check that we can get a static file served by Nginx
 curl -fsL http://localhost:$WEB_PORT/static/admin/css/base.css | fgrep 'DJANGO Admin styles'
 
 # Check that the caching header is set for a hashed file
-curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.7cf54ff789c6.svg | fgrep 'Cache-Control: max-age=315360000'
+curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.7cf54ff789c6.svg \
+  | fgrep 'Cache-Control: max-age=315360000, public, immutable'
 
-# Check that the caching header is *not* set for a file that isn't hashed
-curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg | fgrep -v 'Cache-Control'
+# Check that a compressed JavaScript file has the correct Cache-Control header
+COMPRESSED_JS_FILE="$(compose_cmd exec web find static/CACHE/js -name '*.js' | head -1 | tr -d '\r')"
+curl -fsI http://localhost:$WEB_PORT/$COMPRESSED_JS_FILE \
+  | fgrep 'Cache-Control: max-age=315360000, public, immutable'
+
+# Check the same for a compressed CSS file
+COMPRESSED_CSS_FILE="$(compose_cmd exec web find static/CACHE/css -name '*.css' | head -1 | tr -d '\r')"
+curl -fsI http://localhost:$WEB_PORT/$COMPRESSED_CSS_FILE \
+  | fgrep 'Cache-Control: max-age=315360000, public, immutable'
+
+# Check that the caching header is set to the default for a non-hashed file
+curl -fsI http://localhost:$WEB_PORT/static/admin/img/search.svg \
+  | fgrep 'Cache-Control: max-age=60, public'
 
 # Check that if we say we support gzip, then Nginx gives us that
 GZIP_RESPONSE="$(curl -fsIH 'Accept-Encoding: gzip' http://localhost:$WEB_PORT/static/admin/css/base.css)"
