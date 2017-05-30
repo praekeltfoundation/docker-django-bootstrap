@@ -8,7 +8,9 @@ Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
-> **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tags (`:latest` and `:onbuild`) will remain Debian/Python 2-based as they have always been.
+> **Note**: The `:onbuild` tag is no longer being built and won't be updated. This guide has been updated to show how to use the non-`:onbuild` images.
+
+> **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tag (`:latest`) will remain Debian/Python 2-based as it always has been.
 
 ## Usage
 #### Step 1: Get your Django project in shape
@@ -46,36 +48,40 @@ You'll probably want to make your Django settings file *Docker-friendly* so that
 #### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
-FROM praekeltfoundation/django-bootstrap:onbuild
+FROM praekeltfoundation/django-bootstrap
+
+COPY . /app
+RUN pip install -e .
+
 ENV DJANGO_SETTINGS_MODULE my_django_project.settings
 ENV CELERY_APP my_django_project
+
 RUN django-admin collectstatic --noinput
+
 CMD ["my_django_project.wsgi:application"]
 ```
 
 Let's go through these lines one-by-one:
- 1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap:onbuild` base image.
- 2. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
- 3. *Optional:* If you are using Celery, setting the `CELERY_APP` environment variable lets Celery know what app instance to use (i.e. you don't have to provide [`--app`](http://docs.celeryproject.org/en/latest/reference/celery.bin.celery.html#cmdoption-celery-a)).
- 4. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
- 5. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
+ 1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap` base image.
+ 2. Copy the source (in the current working directory-- `.`) of your project into the image (`/app` in the container)
+ 3. Execute (`RUN`) a `pip` command inside the container to install your project from the source
+ 4. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
+ 5. *Optional:* If you are using Celery, setting the `CELERY_APP` environment variable lets Celery know what app instance to use (i.e. you don't have to provide [`--app`](http://docs.celeryproject.org/en/latest/reference/celery.bin.celery.html#cmdoption-celery-a)).
+ 6. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
+ 7. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
 > Note that previously the way to do point 5 was to set the `APP_MODULE` environment variable. That still works, but is no longer the recommended way and is deprecated.
-
-The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
- 1. `COPY . /app` - copies the source of your project into the image
- 2. `RUN chown -R django:django /app` - ensures the `django` user can write to `/app` and its subdirectories
- 3. `RUN pip install -e .` - installs your project using `pip`
-All these instructions occur directly after the `FROM` instruction in your Dockerfile. Running these `ONBUILD` steps is *optional*. If you don't want them, you can use the plain `praekeltfoundation/django-bootstrap` image.
 
 By default, the [`django-entrypoint.sh`](django-entrypoint.sh) script is run when the container is started. This script runs a once-off `django-admin migrate` to update the database schemas and then launches `nginx` and `gunicorn` to run the application.
 
 The script also allows you to create a Django super user account if needed. Setting the `SUPERUSER_PASSWORD` environment variable will result in a Django superuser account being made with the `admin` username. This will only happen if no `admin` user exists.
 
-#### Step 3: Add a `.dockerignore` file (if using the `:onbuild` image)
+#### Step 3: Add a `.dockerignore` file (if copying in the project source)
+If you are copying the full source of your project into your Docker image (i.e. doing `COPY . /app`), then it is important to add a `.dockerignore` file.
+
 Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](example/.dockerignore) from the example Django project in this repo.
 
-The `:onbuild` image automatically copies in the entire source of your project, but some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
+When copying in the source of your project, some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
 
 As a general rule, you should list all the files in your `.gitignore` in your `.dockerignore` file. If you don't need it in Git, you shouldn't need it in Docker.
 
