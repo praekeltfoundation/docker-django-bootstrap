@@ -1,4 +1,4 @@
-ARG FROM_TAG
+ARG FROM_TAG=py3
 FROM praekeltfoundation/django-bootstrap:$FROM_TAG
 COPY . /app
 RUN pip install -e .
