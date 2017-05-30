@@ -1,4 +1,5 @@
-FROM praekeltfoundation/django-bootstrap:py2
+ARG FROM_TAG
+FROM praekeltfoundation/django-bootstrap:$FROM_TAG
 COPY . /app
 RUN pip install -e .
 ENV DJANGO_SETTINGS_MODULE mysite.docker_settings
