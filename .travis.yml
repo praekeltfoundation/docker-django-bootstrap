@@ -20,11 +20,10 @@ install: []
 
 before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"
-  - dockerfile="$VARIANT.dockerfile"
   # Fetch existing image to use as cache
   - docker pull "$image"
 script:
-  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" --file "$dockerfile" .
+  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" .
   - (cd example && ./test.sh)
   - (cd example && ./test.sh --single-container)
 
