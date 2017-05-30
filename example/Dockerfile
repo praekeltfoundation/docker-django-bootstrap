@@ -1,5 +1,5 @@
-ARG FROM_TAG=py3
-FROM praekeltfoundation/django-bootstrap:$FROM_TAG
+ARG VARIANT=py3
+FROM praekeltfoundation/django-bootstrap:$VARIANT
 COPY . /app
 RUN pip install -e .
 ENV DJANGO_SETTINGS_MODULE mysite.docker_settings

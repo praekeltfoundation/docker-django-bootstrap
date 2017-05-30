@@ -6,7 +6,7 @@ services:
     build:
       context: .
       args:
-        FROM_TAG: ${VARIANT:-py3}
+        VARIANT: ${VARIANT:-py3}
     ports: ['8000']
     environment:
       SECRET_KEY: secret
