@@ -48,7 +48,7 @@ You'll probably want to make your Django settings file *Docker-friendly* so that
 #### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
-FROM praekeltfoundation/django-bootstrap
+FROM praekeltfoundation/django-bootstrap:1-py2
 
 COPY . /app
 RUN pip install -e .
@@ -103,6 +103,24 @@ CMD ["django-admin", "runserver"]
 
 
 If the entrypoint script sees a command for `gunicorn` then it will run all bootstrapping processes (database migration, starting Nginx, etc.). Otherwise, the script will execute the command directly. A special case is Celery, which is described next.
+
+## Tags
+The following tags are available:
+* `<version>-py2`, `py2`: These tags are built with Python 2.7.
+* `<version>-py3`, `py3`: These tags are built with Python 3.6.
+* `<version>`, `latest`: These tags track the Python 2.7 images.
+
+### Versioning
+This Docker image uses semantic versioning, following the [tagging guidelines](https://github.com/docker-library/official-images#tags-and-aliases) in the Docker "Official Images" repository. This means that releases are tagged with the full version as well as each major version. So, for example, the `1.0.0` release is tagged with `1.0.0`, `1.0`, and `1`. When a newer `1.0.x` version is released, that will replace the `1.0` and `1` tags, and so on.
+
+Note that, unlike how Docker images are usually versioned, this version is for the Docker image itself, not the software that the image contains. This means that for a given full version tag (e.g. `1.0.0`), that tag _will not ever change_ to point to a new Docker image.
+
+Sometimes there are changes to the image that could break compatibility with existing images based on this one. If you want to ensure compatibility use a specific version or major version when building on this image. For example:
+```dockerfile
+FROM praekeltfoundation/django-bootstrap:1-py3
+```
+
+Note that only the latest versions are actively maintained. So if, for example, we were to move to version `2.0.0`, the `1.x.x` releases are unlikely to receive updates or fixes. The versioning exists primarily to avoid breakage when a Docker tag is updated to point to a new image.
 
 ## Celery
 It's common for Django applications to have [Celery](http://docs.celeryproject.org/en/latest/django/first-steps-with-django.html) workers performing tasks alongside the actual website. Using this image, there are 2 different ways to run Celery:
