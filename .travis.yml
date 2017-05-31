@@ -5,11 +5,12 @@ language: python
 
 env:
   global:
+    - IMAGE_NAME=praekeltfoundation/django-bootstrap
     - REGISTRY_USER=praekeltorgdeploy
     - secure: "UK7h5cBSPlsL1bPJx+S7ArYKHIUjEWfsITw8M/ObTLaIQHMq2uV3J/D7K5GFkqJFX9sUGmFZBkCu1J9JwpieO1Ew79B2/g4i0aDDmhIuE+IOo5tQ6jinAmP1NEVrCvk1LUTdXwk46VbUCGNxYpv44ge1zwhRrtNpMxaIqXsSYLOXjA7p7A/IghDRYDsRIjz6TfXNKcw+qWxzUTSUjLqgcZqezvI3c9VRRgD94vKh9KpLryVtSPxGjUQTKD6cfu6Yvbz6TzVGp6QCEM9ysRdRJx0ecsP39XBj8VVnqI34ux+4sqiwdqM7SQTlaKFJK+o6dMAX5ZEkA9jQw2kWDX0Pg60zHX+vbH1vycPVaQ6ln9J68pNZx6AMFbJpDkTacrmStH9uIuH6+pN4j4gNsT4TkwtFJDcRuGI0gShqBgQVVHhGuCECfj6RZQ7K35NsQVHXQy47AkwGODu3xUwAuiMOeQVR2rEYCBnJfx+qLY5hIsPzR4MhidLPSZa5T520uhp+35pVAk95DYYEL+6N2C3wIOmtEl6gZNC1P0IgCDuTOU/u5+TCaS5C7M3aWk26SL+n3JnFeCAgLr+OYntHwW9PIen70OG1bokGdxQZ00DvF9veyQz+6IGVEG1Cm5MZv6Cp9bqgpGYMRhKBEAJyKrT+slt6ah10+eIJbT7p4HIgKBM="
   matrix:
-    - VARIANT=py2 PYTHON_VERSION=2.7 TAG_LATEST=1
-    - VARIANT=py3 PYTHON_VERSION=3.6 TAG_LATEST=
+    - VARIANT=py2 PYTHON_VERSION=2.7 TAG_DEFAULT=1
+    - VARIANT=py3 PYTHON_VERSION=3.6 TAG_DEFAULT=
 
 # Update Docker Engine and Compose
 before_install:
@@ -19,7 +20,7 @@ before_install:
 install: []
 
 before_script:
-  - image="praekeltfoundation/django-bootstrap:$VARIANT"
+  - image="$IMAGE_NAME:$VARIANT"
   # Fetch existing image to use as cache
   - docker pull "$image"
 script:
@@ -34,7 +35,15 @@ before_deploy:
   - pip install docker-ci-deploy==0.3.0
   - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
 deploy:
-  provider: script
-  script: dcd --version "$VARIANT" ${TAG_LATEST:+--version-latest} -- "$image"
-  on:
-    branch: develop
+  # On develop branch, tag with (e.g.) develop-py3, debd419-develop-py3...
+  # Then tag default variant with develop, develop-py2, debd419-develop, debd419-develop-py2
+  - provider: script
+    script: dcd --tag develop-"$VARIANT" ${TAG_DEFAULT:+develop} --version "$(git rev-parse --short HEAD)" --version-latest "$image"
+    on:
+      branch: develop
+  # On tags, tag with (e.g.) py3, 1.0.1-py3, 1.0-py3, 1-py3...
+  # Then tag default variant with latest, py2, 1.0.1, 1.0.1-py2, 1.0, 1.0-py2, 1, 1-py2
+  - provider: script
+    script: dcd --tag "$VARIANT" ${TAG_DEFAULT:+''} --version "$TRAVIS_TAG" --version-latest --version-semver "$image"
+    on:
+      tags: true
