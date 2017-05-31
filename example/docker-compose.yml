@@ -5,7 +5,8 @@ services:
     image: "mysite:${VARIANT:-py3}"
     build:
       context: .
-      dockerfile: "${VARIANT:-py3}.dockerfile"
+      args:
+        VARIANT: ${VARIANT:-py3}
     ports: ['8000']
     environment:
       SECRET_KEY: secret

@@ -1,4 +1,5 @@
-FROM praekeltfoundation/python-base:2.7
+ARG PYTHON_VERSION=2.7
+FROM praekeltfoundation/python-base:${PYTHON_VERSION}
 
 # Create the user and working directories first as they shouldn't change often.
 # Specify the UID/GIDs so that they do not change somehow and mess with the

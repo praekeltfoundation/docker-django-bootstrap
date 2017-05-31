@@ -1,4 +1,5 @@
-FROM praekeltfoundation/django-bootstrap:py2
+ARG VARIANT=py3
+FROM praekeltfoundation/django-bootstrap:$VARIANT
 COPY . /app
 RUN pip install -e .
 ENV DJANGO_SETTINGS_MODULE mysite.docker_settings
