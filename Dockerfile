@@ -33,5 +33,5 @@ WORKDIR /app
 
 COPY django-entrypoint.sh celery-entrypoint.sh \
     /scripts/
-ENTRYPOINT ["tini", "django-entrypoint.sh"]
+ENTRYPOINT ["tini", "--", "django-entrypoint.sh"]
 CMD []
