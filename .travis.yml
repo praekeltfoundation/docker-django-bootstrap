@@ -14,7 +14,7 @@ env:
 # Update Docker Engine and Compose
 before_install:
   - sudo apt-get update
-  - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
+  - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-ce
   - pip install --upgrade docker-compose
 install: []
 
