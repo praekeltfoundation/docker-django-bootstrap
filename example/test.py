@@ -15,12 +15,14 @@ from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, Is, LessThan,
     MatchesAll, MatchesAny, MatchesDict, MatchesRegex, Not)
 
+POSTGRES_IMAGE = 'postgres:9.6-alpine'
 POSTGRES_PARAMS = {
     'service': 'db',
     'db': 'mysite',
     'user': 'mysite',
     'password': 'secret',
 }
+RABBITMQ_IMAGE = 'rabbitmq:3.6-alpine'
 RABBITMQ_PARAMS = {
     'service': 'amqp',
     'vhost': '/mysite',
@@ -31,6 +33,13 @@ DATABASE_URL = (
     'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
 BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
+
+
+def pull_image_if_not_found(images, image):
+    try:
+        images.get(image)
+    except docker.errors.ImageNotFound:
+        images.pull(image)
 
 
 def resource_name(name, namespace='test'):
@@ -133,8 +142,10 @@ class TestContainer(unittest.TestCase):
 
     @classmethod
     def setup_db(cls):
+        pull_image_if_not_found(cls.client.images, POSTGRES_IMAGE)
+
         cls.create_service_container(
-            POSTGRES_PARAMS['service'], 'postgres:9.6-alpine', environment={
+            POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
                 'POSTGRES_DB': POSTGRES_PARAMS['db'],
                 'POSTGRES_USER': POSTGRES_PARAMS['user'],
                 'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
@@ -145,8 +156,10 @@ class TestContainer(unittest.TestCase):
 
     @classmethod
     def setup_amqp(cls):
+        pull_image_if_not_found(cls.client.images, RABBITMQ_IMAGE)
+
         cls.create_service_container(
-            RABBITMQ_PARAMS['service'], 'rabbitmq:3.6-alpine', environment={
+            RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
                 'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
                 'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
                 'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
