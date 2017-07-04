@@ -2,6 +2,7 @@ sudo: required
 services:
   - docker
 language: python
+python: '3.6'
 
 env:
   global:
@@ -15,8 +16,8 @@ env:
 before_install:
   - sudo apt-get update
   - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-ce
-  - pip install --upgrade docker-compose
-install: []
+install:
+  - pip install -r example/requirements-test.txt
 
 before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"
@@ -24,8 +25,8 @@ before_script:
   - docker pull "$image"
 script:
   - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" .
-  - (cd example && ./test.sh)
-  - (cd example && ./test.sh --single-container)
+  - docker build -t "mysite:$VARIANT" --build-arg VARIANT="$VARIANT" example)
+  - python example/test.py "mysite:$VARIANT"
 
 after_script:
   - docker images
