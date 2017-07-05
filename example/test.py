@@ -225,6 +225,20 @@ class TestWeb(unittest.TestCase):
 #            'beat', command=['celery', 'beat'], publish_port=False)
 #        cls.start_service_container('beat', r'beat: Starting\.\.\.')
 
+    def test_database_tables_created(self):
+        """
+        When the web container is running, a migration should have completed
+        and there should be some tables in the database.
+        """
+        psql_output = docker_helper.get_container('db').exec_run(
+            ['psql', '-qtA', '--dbname', 'mysite', '-c',
+             ('SELECT COUNT(*) FROM information_schema.tables WHERE '
+              "table_schema='public';")],
+            user='postgres').decode('utf-8')
+
+        count = int(psql_output.strip())
+        assert_that(count, GreaterThan(0))
+
     def get(self, path, **kwargs):
         return requests.get(
             'http://127.0.0.1:{}{}'.format(self.web_port, path), **kwargs)
