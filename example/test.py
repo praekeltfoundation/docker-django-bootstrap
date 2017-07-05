@@ -228,6 +228,8 @@ class TestContainer(unittest.TestCase):
         """
         response = self.get('/admin/')
 
+        assert_that(response.headers['Content-Type'],
+                    Equals('text/html; charset=utf-8'))
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
 
@@ -271,6 +273,160 @@ class TestContainer(unittest.TestCase):
             'http_x_forwarded_proto': Equals(''),
             'http_x_forwarded_for': Equals(''),
         }))
+
+    def test_static_file(self):
+        """
+        When a static file is requested, Nginx should serve the file with the
+        correct mime type.
+        """
+        response = self.get('/static/admin/css/base.css')
+
+        assert_that(response.headers['Content-Type'], Equals('text/css'))
+        assert_that(response.text, Contains('DJANGO Admin styles'))
+
+    def test_manifest_static_storage_file(self):
+        """
+        When a static file that was processed by Django's
+        ManifestStaticFilesStorage system is requested, that file should be
+        served with a far-future 'Cache-Control' header.
+        """
+        hashed_svg = self.services['web'].exec_run(
+            ['find', 'static/admin/img', '-regextype', 'posix-egrep', '-regex',
+             '.*\.[a-f0-9]{12}\.svg$'])
+        test_file = hashed_svg.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file)
+
+        assert_that(response.headers['Content-Type'], Equals('image/svg+xml'))
+        assert_that(response.headers['Cache-Control'],
+                    Equals('max-age=315360000, public, immutable'))
+
+    def test_django_compressor_js_file(self):
+        """
+        When a static JavaScript file that was processed by django_compressor
+        is requested, that file should be served with a far-future
+        'Cache-Control' header.
+        """
+        compressed_js = self.services['web'].exec_run(
+            ['find', 'static/CACHE/js', '-name', '*.js'])
+        test_file = compressed_js.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file)
+
+        assert_that(response.headers['Content-Type'],
+                    Equals('application/javascript'))
+        assert_that(response.headers['Cache-Control'],
+                    Equals('max-age=315360000, public, immutable'))
+
+    def test_django_compressor_css_file(self):
+        """
+        When a static CSS file that was processed by django_compressor is
+        requested, that file should be served with a far-future 'Cache-Control'
+        header.
+        """
+        compressed_js = self.services['web'].exec_run(
+            ['find', 'static/CACHE/css', '-name', '*.css'])
+        test_file = compressed_js.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file)
+
+        assert_that(response.headers['Content-Type'], Equals('text/css'))
+        assert_that(response.headers['Cache-Control'],
+                    Equals('max-age=315360000, public, immutable'))
+
+    def test_gzip_css_compressed(self):
+        """
+        When a CSS file larger than 1024 bytes is requested and the
+        'Accept-Encoding' header lists gzip as an accepted encoding, the file
+        should be served gzipped.
+        """
+        css_to_gzip = self.services['web'].exec_run(
+            ['find', 'static', '-name', '*.css', '-size', '+1024c'])
+        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file,
+                            headers={'Accept-Encoding': 'gzip'})
+
+        assert_that(response.headers['Content-Type'], Equals('text/css'))
+        assert_that(response.headers['Content-Encoding'], Equals('gzip'))
+        assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
+
+    def test_gzip_woff_not_compressed(self):
+        """
+        When a .woff file larger than 1024 bytes is requested and the
+        'Accept-Encoding' header lists gzip as an accepted encoding, the file
+        should not be served gzipped as it is already a compressed format.
+        """
+        woff_to_not_gzip = self.services['web'].exec_run(
+            ['find', 'static', '-name', '*.woff', '-size', '+1024c'])
+        test_file = woff_to_not_gzip.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file,
+                            headers={'Accept-Encoding': 'gzip'})
+
+        assert_that(response.headers['Content-Type'],
+                    Equals('application/font-woff'))
+        assert_that(response.headers, MatchesAll(
+            Not(Contains('Content-Encoding')),
+            Not(Contains('Vary')),
+        ))
+
+    def test_gzip_accept_encoding_respected(self):
+        """
+        When a CSS file larger than 1024 bytes is requested and the
+        'Accept-Encoding' header does not list gzip as an accepted encoding,
+        the file should not be served gzipped, but the 'Vary' header should be
+        set to 'Accept-Encoding'.
+        """
+        css_to_gzip = self.services['web'].exec_run(
+            ['find', 'static', '-name', '*.css', '-size', '+1024c'])
+        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file,
+                            headers={'Accept-Encoding': ''})
+
+        assert_that(response.headers['Content-Type'], Equals('text/css'))
+        assert_that(response.headers, Not(Contains('Content-Encoding')))
+        # The Vary header should be set if there is a *possibility* that this
+        # file will be served with a different encoding.
+        assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
+
+    def test_gzip_via_compressed(self):
+        """
+        When a CSS file larger than 1024 bytes is requested and the
+        'Accept-Encoding' header lists gzip as an accepted encoding and the
+        'Via' header is set, the file should be served gzipped.
+        """
+        css_to_gzip = self.services['web'].exec_run(
+            ['find', 'static', '-name', '*.css', '-size', '+1024c'])
+        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+
+        response = self.get(
+            '/' + test_file,
+            headers={'Accept-Encoding': 'gzip', 'Via': 'Internet.org'})
+
+        assert_that(response.headers['Content-Type'], Equals('text/css'))
+        assert_that(response.headers['Content-Encoding'], Equals('gzip'))
+        assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
+
+    def test_gzip_small_file_not_compressed(self):
+        """
+        When a CSS file smaller than 1024 bytes is requested and the
+        'Accept-Encoding' header lists gzip as an accepted encoding, the file
+        should not be served gzipped.
+        """
+        css_to_gzip = self.services['web'].exec_run(
+            ['find', 'static', '-name', '*.css', '-size', '-1024c'])
+        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+
+        response = self.get('/' + test_file,
+                            headers={'Accept-Encoding': 'gzip'})
+
+        assert_that(response.headers['Content-Type'], Equals('text/css'))
+        assert_that(response.headers, MatchesAll(
+            Not(Contains('Content-Encoding')),
+            Not(Contains('Vary')),
+        ))
 
 
 if __name__ == '__main__':
