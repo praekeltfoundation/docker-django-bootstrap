@@ -214,18 +214,6 @@ class TestWeb(unittest.TestCase):
         cls.web_container = docker_helper.get_container('web')
         cls.web_port = docker_helper.get_container_host_port('web', '8000/tcp')
 
-#    @classmethod
-#    def setup_worker(cls):
-#        cls.create_web_service_container(
-#            'worker', command=['celery', 'worker'], publish_port=False)
-#        cls.start_service_container('worker', r'celery@\w+ ready')
-
-#    @classmethod
-#    def setup_beat(cls):
-#        cls.create_web_service_container(
-#            'beat', command=['celery', 'beat'], publish_port=False)
-#        cls.start_service_container('beat', r'beat: Starting\.\.\.')
-
     def test_expected_processes(self):
         """
         When the container is running, there should be 5 running processes:
@@ -489,6 +477,87 @@ class TestWeb(unittest.TestCase):
             Not(Contains('Content-Encoding')),
             Not(Contains('Vary')),
         ))
+
+
+class TestCeleryWorker(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        create_django_bootstrap_container(
+            docker_helper, 'worker', command=['celery', 'worker'],
+            publish_port=False)
+        docker_helper.start_container('worker', r'celery@\w+ ready')
+
+        cls.worker_container = docker_helper.get_container('worker')
+
+    def test_expected_processes(self):
+        """
+        When the container is running, there should be 3 running processes:
+        tini, and the Celery worker master and worker.
+        """
+        ps_output = self.worker_container.exec_run(
+            ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
+        ps_lines = ps_output.decode('utf-8').split('\n')
+        ps_lines.pop()
+
+        ps_data = []
+        for line in ps_lines:
+            # Tuple of process information: user, PID, name
+            parts = line.split(None, 2)
+            if not parts[2].startswith('ps ax'):
+                ps_data.append((int(parts[0]), parts[1], parts[2]))
+
+        assert_that(ps_data, HasLength(3))
+
+        assert_that(ps_data.pop(0), Equals(
+            (1, 'root',
+             'tini -- django-entrypoint.sh celery worker')))
+
+        # The next process we have no control over the start order or PIDs...
+        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
+        assert_that(ps_data, MatchesSetwise(*map(Equals, [
+            ('django',
+             '/usr/local/bin/python /usr/local/bin/celery worker '
+             '--concurrency 1'),
+            # No obvious way to differentiate Celery master from worker
+            ('django',
+             '/usr/local/bin/python /usr/local/bin/celery worker '
+             '--concurrency 1'),
+        ])))
+
+
+class TestCeleryBeat(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        create_django_bootstrap_container(
+            docker_helper, 'beat', command=['celery', 'beat'],
+            publish_port=False)
+        docker_helper.start_container('beat', r'beat: Starting\.\.\.')
+
+        cls.beat_container = docker_helper.get_container('beat')
+
+    def test_expected_processes(self):
+        """
+        When the container is running, there should be 2 running processes:
+        tini, and the Celery beat process.
+        """
+        ps_output = self.beat_container.exec_run(
+            ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
+        ps_lines = ps_output.decode('utf-8').split('\n')
+        ps_lines.pop()
+
+        ps_data = []
+        for line in ps_lines:
+            # Tuple of process information: user, PID, name
+            parts = line.split(None, 2)
+            if not parts[2].startswith('ps ax'):
+                ps_data.append((int(parts[0]), parts[1], parts[2]))
+
+        assert_that(ps_data, HasLength(2))
+        assert_that(ps_data[0], Equals(
+            (1, 'root', 'tini -- django-entrypoint.sh celery beat')))
+        # We don't know what PID we will get, so don't check it
+        assert_that(ps_data[1][1:], Equals(
+            ('django', '/usr/local/bin/python /usr/local/bin/celery beat')))
 
 
 if __name__ == '__main__':
