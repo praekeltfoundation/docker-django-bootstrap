@@ -29,19 +29,11 @@ RABBITMQ_PARAMS = {
     'user': 'mysite',
     'password': 'secret',
 }
+DJANGO_BOOTSTRAP_IMAGE = 'mysite:py3'
 DATABASE_URL = (
     'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
 BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
-
-
-def pull_image_if_not_found(images, image):
-    try:
-        images.get(image)
-        print("Image '{}' found".format(image))
-    except docker.errors.ImageNotFound:
-        print("Pulling image '{}'...".format(image))
-        images.pull(image)
 
 
 def resource_name(name, namespace='test'):
@@ -82,46 +74,46 @@ def wait_for_log_line(container, pattern):
             return line
 
 
-class TestContainer(unittest.TestCase):
-    TEST_IMAGE = 'mysite:py3'
-
-    @classmethod
-    def setUpClass(cls):
-        # Set up a mini-Docker Compose
-        cls.client = docker.client.from_env()
-        cls.network = cls.client.networks.create(
+class DockerHelper(object):
+    def setup(self):
+        self._client = docker.client.from_env()
+        self._network = self._client.networks.create(
             resource_name('default'), driver='bridge')
-        cls.services = {}
+        self._containers = {}
 
-        cls.setup_db()
-        cls.setup_amqp()
-        cls.setup_web()
-        cls.setup_worker()
-        cls.setup_beat()
+    def teardown(self):
+        # Remove all containers
+        for service in self._containers.keys():
+            self.stop_and_remove_container(service)
 
-    @classmethod
-    def create_service_container(cls, name, image, **kwargs):
-        assert name not in cls.services
+        # Remove the network
+        self._network.remove()
 
+    def create_container(self, name, image, **kwargs):
         container_name = resource_name(name)
         print("Creating container '{}'...".format(container_name))
-        container = cls.client.containers.create(
-            image, name=container_name, detach=True, network=cls.network.id,
+        container = self._client.containers.create(
+            image, name=container_name, detach=True, network=self._network.id,
             **kwargs)
 
         # FIXME: Hack to make sure the container has the right network aliases.
         # If we don't specify a network when the container is created then the
         # default bridge network is attached which we don't want.
-        cls.network.disconnect(container)
-        cls.network.connect(container, aliases=[name])
+        self._network.disconnect(container)
+        self._network.connect(container, aliases=[name])
 
-        cls.services[name] = container
+        self._put_container(name, container)
 
-    @classmethod
-    def start_service_container(cls, name, log_line_pattern):
-        assert name in cls.services
+    def get_container(self, name):
+        assert name in self._containers
+        return self._containers[name]
 
-        container = cls.services[name]
+    def _put_container(self, name, container):
+        assert name not in self._containers
+        self._containers[name] = container
+
+    def start_container(self, name, log_line_pattern):
+        container = self.get_container(name)
         print("Starting container '{}'...".format(container.name))
         container.start()
         print(wait_for_log_line(container, log_line_pattern))
@@ -130,92 +122,108 @@ class TestContainer(unittest.TestCase):
         assert container.status == 'running'
         print()
 
-    @classmethod
-    def stop_and_remove_service_container(
-            cls, name, stop_timeout=5, remove_force=True):
-        assert name in cls.services
-
-        container = cls.services[name]
+    def stop_and_remove_container(
+            self, name, stop_timeout=5, remove_force=True):
+        container = self.get_container(name)
         print("Stopping container '{}'...".format(container.name))
         container.stop(timeout=stop_timeout)
         print("Removing container '{}'...".format(container.name))
         container.remove(force=remove_force)
         print()
 
-    @classmethod
-    def setup_db(cls):
-        pull_image_if_not_found(cls.client.images, POSTGRES_IMAGE)
+    def pull_image_if_not_found(self, image):
+        try:
+            self._client.images.get(image)
+            print("Image '{}' found".format(image))
+        except docker.errors.ImageNotFound:
+            print("Pulling image '{}'...".format(image))
+            self._client.images.pull(image)
 
-        cls.create_service_container(
-            POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
-                'POSTGRES_DB': POSTGRES_PARAMS['db'],
-                'POSTGRES_USER': POSTGRES_PARAMS['user'],
-                'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
-            })
-        cls.start_service_container(
-            POSTGRES_PARAMS['service'],
-            r'database system is ready to accept connections')
-
-    @classmethod
-    def setup_amqp(cls):
-        pull_image_if_not_found(cls.client.images, RABBITMQ_IMAGE)
-
-        cls.create_service_container(
-            RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
-                'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
-                'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
-                'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
-            })
-        cls.start_service_container(
-            RABBITMQ_PARAMS['service'], r'Server startup complete')
-
-    @classmethod
-    def create_web_service_container(
-            cls, name, command=None, publish_port=True):
-        kwargs = {
-            'command': command,
-            'environment': {
-                'SECRET_KEY': 'secret',
-                'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-                'DATABASE_URL': DATABASE_URL,
-                'CELERY_BROKER_URL': BROKER_URL,
-            },
-        }
-        if publish_port:
-            kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
-
-        cls.create_service_container(name, cls.TEST_IMAGE, **kwargs)
-
-    @classmethod
-    def setup_web(cls):
-        cls.create_web_service_container('web')
-        cls.start_service_container('web', r'Booting worker')
-
+    def get_container_host_port(self, name, container_port, index=0):
         # FIXME: Bit of a hack to get the port number on the host
-        inspection = cls.client.api.inspect_container(cls.services['web'].id)
-        cls.web_port = (
-            inspection['NetworkSettings']['Ports']['8000/tcp'][0]['HostPort'])
+        container = self.get_container(name)
+        inspection = self._client.api.inspect_container(container.id)
+        return (inspection['NetworkSettings']['Ports']
+                [container_port][index]['HostPort'])
 
+
+docker_helper = DockerHelper()
+
+
+def setUpModule():
+    docker_helper.setup()
+    setup_db(docker_helper)
+    setup_amqp(docker_helper)
+
+
+def setup_db(docker_helper):
+    docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
+
+    docker_helper.create_container(
+        POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
+            'POSTGRES_DB': POSTGRES_PARAMS['db'],
+            'POSTGRES_USER': POSTGRES_PARAMS['user'],
+            'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
+        })
+    docker_helper.start_container(
+        POSTGRES_PARAMS['service'],
+        r'database system is ready to accept connections')
+
+
+def setup_amqp(docker_helper):
+    docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
+
+    docker_helper.create_container(
+        RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
+            'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
+            'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
+            'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
+        })
+    docker_helper.start_container(
+        RABBITMQ_PARAMS['service'], r'Server startup complete')
+
+
+def tearDownModule():
+    docker_helper.teardown()
+
+
+def create_django_bootstrap_container(
+        docker_helper, name, command=None, publish_port=True):
+    kwargs = {
+        'command': command,
+        'environment': {
+            'SECRET_KEY': 'secret',
+            'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
+            'DATABASE_URL': DATABASE_URL,
+            'CELERY_BROKER_URL': BROKER_URL,
+        },
+    }
+    if publish_port:
+        kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
+
+    docker_helper.create_container(name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
+
+
+class TestWeb(unittest.TestCase):
     @classmethod
-    def setup_worker(cls):
-        cls.create_web_service_container(
-            'worker', command=['celery', 'worker'], publish_port=False)
-        cls.start_service_container('worker', r'celery@\w+ ready')
+    def setUpClass(cls):
+        create_django_bootstrap_container(docker_helper, 'web')
+        docker_helper.start_container('web', r'Booting worker')
 
-    @classmethod
-    def setup_beat(cls):
-        cls.create_web_service_container(
-            'beat', command=['celery', 'beat'], publish_port=False)
-        cls.start_service_container('beat', r'beat: Starting\.\.\.')
+        cls.web_container = docker_helper.get_container('web')
+        cls.web_port = docker_helper.get_container_host_port('web', '8000/tcp')
 
-    @classmethod
-    def tearDownClass(cls):
-        # Remove all containers
-        for service in cls.services.keys():
-            cls.stop_and_remove_service_container(service)
+#    @classmethod
+#    def setup_worker(cls):
+#        cls.create_web_service_container(
+#            'worker', command=['celery', 'worker'], publish_port=False)
+#        cls.start_service_container('worker', r'celery@\w+ ready')
 
-        # Remove the network
-        cls.network.remove()
+#    @classmethod
+#    def setup_beat(cls):
+#        cls.create_web_service_container(
+#            'beat', command=['celery', 'beat'], publish_port=False)
+#        cls.start_service_container('beat', r'beat: Starting\.\.\.')
 
     def get(self, path, **kwargs):
         return requests.get(
@@ -238,7 +246,7 @@ class TestContainer(unittest.TestCase):
         When a request has been made to the container, Nginx logs access logs
         to stdout
         """
-        logs = (self.services['web']
+        logs = (self.web_container
                 .logs(stdout=True, stderr=False).decode('utf-8'))
 
         match = re.search(r'\{ "time": .+', logs)
@@ -290,7 +298,7 @@ class TestContainer(unittest.TestCase):
         ManifestStaticFilesStorage system is requested, that file should be
         served with a far-future 'Cache-Control' header.
         """
-        hashed_svg = self.services['web'].exec_run(
+        hashed_svg = self.web_container.exec_run(
             ['find', 'static/admin/img', '-regextype', 'posix-egrep', '-regex',
              '.*\.[a-f0-9]{12}\.svg$'])
         test_file = hashed_svg.decode('utf-8').split('\n')[0]
@@ -307,7 +315,7 @@ class TestContainer(unittest.TestCase):
         is requested, that file should be served with a far-future
         'Cache-Control' header.
         """
-        compressed_js = self.services['web'].exec_run(
+        compressed_js = self.web_container.exec_run(
             ['find', 'static/CACHE/js', '-name', '*.js'])
         test_file = compressed_js.decode('utf-8').split('\n')[0]
 
@@ -324,7 +332,7 @@ class TestContainer(unittest.TestCase):
         requested, that file should be served with a far-future 'Cache-Control'
         header.
         """
-        compressed_js = self.services['web'].exec_run(
+        compressed_js = self.web_container.exec_run(
             ['find', 'static/CACHE/css', '-name', '*.css'])
         test_file = compressed_js.decode('utf-8').split('\n')[0]
 
@@ -340,7 +348,7 @@ class TestContainer(unittest.TestCase):
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should be served gzipped.
         """
-        css_to_gzip = self.services['web'].exec_run(
+        css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip.decode('utf-8').split('\n')[0]
 
@@ -357,7 +365,7 @@ class TestContainer(unittest.TestCase):
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should not be served gzipped as it is already a compressed format.
         """
-        woff_to_not_gzip = self.services['web'].exec_run(
+        woff_to_not_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.woff', '-size', '+1024c'])
         test_file = woff_to_not_gzip.decode('utf-8').split('\n')[0]
 
@@ -378,7 +386,7 @@ class TestContainer(unittest.TestCase):
         the file should not be served gzipped, but the 'Vary' header should be
         set to 'Accept-Encoding'.
         """
-        css_to_gzip = self.services['web'].exec_run(
+        css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip.decode('utf-8').split('\n')[0]
 
@@ -397,7 +405,7 @@ class TestContainer(unittest.TestCase):
         'Accept-Encoding' header lists gzip as an accepted encoding and the
         'Via' header is set, the file should be served gzipped.
         """
-        css_to_gzip = self.services['web'].exec_run(
+        css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip.decode('utf-8').split('\n')[0]
 
@@ -415,7 +423,7 @@ class TestContainer(unittest.TestCase):
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should not be served gzipped.
         """
-        css_to_gzip = self.services['web'].exec_run(
+        css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '-1024c'])
         test_file = css_to_gzip.decode('utf-8').split('\n')[0]
 
@@ -432,6 +440,6 @@ class TestContainer(unittest.TestCase):
 if __name__ == '__main__':
     # FIXME: Maybe pytest is better at this
     if len(sys.argv) > 1:
-        TestContainer.TEST_IMAGE = sys.argv.pop()
+        DJANGO_BOOTSTRAP_IMAGE = sys.argv.pop()
 
     unittest.main()
