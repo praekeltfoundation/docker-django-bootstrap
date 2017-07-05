@@ -38,7 +38,9 @@ BROKER_URL = (
 def pull_image_if_not_found(images, image):
     try:
         images.get(image)
+        print("Image '{}' found".format(image))
     except docker.errors.ImageNotFound:
+        print("Pulling image '{}'...".format(image))
         images.pull(image)
 
 
