@@ -75,6 +75,22 @@ def wait_for_log_line(container, pattern):
             return line
 
 
+def list_container_processes(container):
+    ps_output = container.exec_run(
+        ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
+    ps_lines = ps_output.decode('utf-8').split('\n')
+    ps_lines.pop()
+
+    ps_data = []
+    for line in ps_lines:
+        # Tuple of process information: user, PID, name
+        parts = line.split(None, 2)
+        if not parts[2].startswith('ps ax'):
+            ps_data.append((int(parts[0]), parts[1], parts[2]))
+
+    return ps_data
+
+
 class DockerHelper(object):
     def setup(self):
         self._client = docker.client.from_env()
@@ -219,17 +235,7 @@ class TestWeb(unittest.TestCase):
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_output = self.web_container.exec_run(
-            ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
-        ps_lines = ps_output.decode('utf-8').split('\n')
-        ps_lines.pop()
-
-        ps_data = []
-        for line in ps_lines:
-            # Tuple of process information: user, PID, name
-            parts = line.split(None, 2)
-            if not parts[2].startswith('ps ax'):
-                ps_data.append((int(parts[0]), parts[1], parts[2]))
+        ps_data = list_container_processes(self.web_container)
 
         assert_that(ps_data, HasLength(5))
 
@@ -494,17 +500,7 @@ class TestCeleryWorker(unittest.TestCase):
         When the container is running, there should be 3 running processes:
         tini, and the Celery worker master and worker.
         """
-        ps_output = self.worker_container.exec_run(
-            ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
-        ps_lines = ps_output.decode('utf-8').split('\n')
-        ps_lines.pop()
-
-        ps_data = []
-        for line in ps_lines:
-            # Tuple of process information: user, PID, name
-            parts = line.split(None, 2)
-            if not parts[2].startswith('ps ax'):
-                ps_data.append((int(parts[0]), parts[1], parts[2]))
+        ps_data = list_container_processes(self.worker_container)
 
         assert_that(ps_data, HasLength(3))
 
@@ -540,17 +536,7 @@ class TestCeleryBeat(unittest.TestCase):
         When the container is running, there should be 2 running processes:
         tini, and the Celery beat process.
         """
-        ps_output = self.beat_container.exec_run(
-            ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
-        ps_lines = ps_output.decode('utf-8').split('\n')
-        ps_lines.pop()
-
-        ps_data = []
-        for line in ps_lines:
-            # Tuple of process information: user, PID, name
-            parts = line.split(None, 2)
-            if not parts[2].startswith('ps ax'):
-                ps_data.append((int(parts[0]), parts[1], parts[2]))
+        ps_data = list_container_processes(self.beat_container)
 
         assert_that(ps_data, HasLength(2))
         assert_that(ps_data[0], Equals(
