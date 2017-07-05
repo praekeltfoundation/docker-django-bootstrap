@@ -12,8 +12,9 @@ import iso8601
 import requests
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    AfterPreprocessing as After, Contains, Equals, GreaterThan, Is, LessThan,
-    MatchesAll, MatchesAny, MatchesDict, MatchesRegex, Not)
+    AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength, Is,
+    LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesRegex,
+    MatchesSetwise, Not)
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
 POSTGRES_PARAMS = {
@@ -224,6 +225,45 @@ class TestWeb(unittest.TestCase):
 #        cls.create_web_service_container(
 #            'beat', command=['celery', 'beat'], publish_port=False)
 #        cls.start_service_container('beat', r'beat: Starting\.\.\.')
+
+    def test_expected_processes(self):
+        """
+        When the container is running, there should be 5 running processes:
+        tini, the Nginx master and worker, and the Gunicorn master and worker.
+        """
+        ps_output = self.web_container.exec_run(
+            ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
+        ps_lines = ps_output.decode('utf-8').split('\n')
+        ps_lines.pop()
+
+        ps_data = []
+        for line in ps_lines:
+            # Tuple of process information: user, PID, name
+            parts = line.split(None, 2)
+            if not parts[2].startswith('ps ax'):
+                ps_data.append((int(parts[0]), parts[1], parts[2]))
+
+        assert_that(ps_data, HasLength(5))
+
+        assert_that(ps_data.pop(0), Equals(
+            (1, 'root',
+             'tini -- django-entrypoint.sh mysite.wsgi:application')))
+
+        # The next process we have no control over the start order or PIDs...
+        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
+        assert_that(ps_data, MatchesSetwise(*map(Equals, [
+            ('root', 'nginx: master process nginx -g daemon off;'),
+            ('nginx', 'nginx: worker process'),
+            ('django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+            # No obvious way to differentiate Gunicorn master from worker
+            ('django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+        ])))
 
     def test_database_tables_created(self):
         """
