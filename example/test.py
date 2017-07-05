@@ -96,12 +96,21 @@ class DockerHelper(object):
         self._client = docker.client.from_env()
         self._network = self._client.networks.create(
             resource_name('default'), driver='bridge')
-        self._containers = {}
+        self._container_ids = []
 
     def teardown(self):
         # Remove all containers
-        for service in self._containers.keys():
-            self.stop_and_remove_container(service)
+        for container_id in self._container_ids:
+            # Check if the container exists before trying to remove it
+            try:
+                container = self._client.containers.get(container_id)
+            except docker.errors.NotFound:
+                continue
+
+            print("Warning container '{}' was still running".format(
+                container.name))
+
+            self.stop_and_remove_container(container)
 
         # Remove the network
         self._network.remove()
@@ -119,18 +128,13 @@ class DockerHelper(object):
         self._network.disconnect(container)
         self._network.connect(container, aliases=[name])
 
-        self._put_container(name, container)
+        # Keep a reference to created containers to make sure they are cleaned
+        # up
+        self._container_ids.append(container.id)
 
-    def get_container(self, name):
-        assert name in self._containers
-        return self._containers[name]
+        return container
 
-    def _put_container(self, name, container):
-        assert name not in self._containers
-        self._containers[name] = container
-
-    def start_container(self, name, log_line_pattern):
-        container = self.get_container(name)
+    def start_container(self, container, log_line_pattern):
         print("Starting container '{}'...".format(container.name))
         container.start()
         print(wait_for_log_line(container, log_line_pattern))
@@ -140,8 +144,7 @@ class DockerHelper(object):
         print()
 
     def stop_and_remove_container(
-            self, name, stop_timeout=5, remove_force=True):
-        container = self.get_container(name)
+            self, container, stop_timeout=5, remove_force=True):
         print("Stopping container '{}'...".format(container.name))
         container.stop(timeout=stop_timeout)
         print("Removing container '{}'...".format(container.name))
@@ -156,51 +159,56 @@ class DockerHelper(object):
             print("Pulling image '{}'...".format(image))
             self._client.images.pull(image)
 
-    def get_container_host_port(self, name, container_port, index=0):
+    def get_container_host_port(self, container, container_port, index=0):
         # FIXME: Bit of a hack to get the port number on the host
-        container = self.get_container(name)
         inspection = self._client.api.inspect_container(container.id)
         return (inspection['NetworkSettings']['Ports']
                 [container_port][index]['HostPort'])
 
 
 docker_helper = DockerHelper()
+infra_containers = {}
 
 
 def setUpModule():
     docker_helper.setup()
-    setup_db(docker_helper)
-    setup_amqp(docker_helper)
+    setup_db()
+    setup_amqp()
 
 
-def setup_db(docker_helper):
+def setup_db():
     docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
 
-    docker_helper.create_container(
+    container = docker_helper.create_container(
         POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
             'POSTGRES_DB': POSTGRES_PARAMS['db'],
             'POSTGRES_USER': POSTGRES_PARAMS['user'],
             'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
         })
     docker_helper.start_container(
-        POSTGRES_PARAMS['service'],
+        container,
         r'database system is ready to accept connections')
 
+    infra_containers['db'] = container
 
-def setup_amqp(docker_helper):
+
+def setup_amqp():
     docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
 
-    docker_helper.create_container(
+    container = docker_helper.create_container(
         RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
             'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
             'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
             'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
         })
-    docker_helper.start_container(
-        RABBITMQ_PARAMS['service'], r'Server startup complete')
+    docker_helper.start_container(container, r'Server startup complete')
+
+    infra_containers['amqp'] = container
 
 
 def tearDownModule():
+    for container in infra_containers.values():
+        docker_helper.stop_and_remove_container(container)
     docker_helper.teardown()
 
 
@@ -218,17 +226,23 @@ def create_django_bootstrap_container(
     if publish_port:
         kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-    docker_helper.create_container(name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
+    return docker_helper.create_container(
+        name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
 
 
 class TestWeb(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        create_django_bootstrap_container(docker_helper, 'web')
-        docker_helper.start_container('web', r'Booting worker')
+        cls.web_container = create_django_bootstrap_container(
+            docker_helper, 'web')
+        docker_helper.start_container(cls.web_container, r'Booting worker')
 
-        cls.web_container = docker_helper.get_container('web')
-        cls.web_port = docker_helper.get_container_host_port('web', '8000/tcp')
+        cls.web_port = docker_helper.get_container_host_port(
+            cls.web_container, '8000/tcp')
+
+    @classmethod
+    def tearDownClass(cls):
+        docker_helper.stop_and_remove_container(cls.web_container)
 
     def test_expected_processes(self):
         """
@@ -264,7 +278,7 @@ class TestWeb(unittest.TestCase):
         When the web container is running, a migration should have completed
         and there should be some tables in the database.
         """
-        psql_output = docker_helper.get_container('db').exec_run(
+        psql_output = infra_containers['db'].exec_run(
             ['psql', '-qtA', '--dbname', 'mysite', '-c',
              ('SELECT COUNT(*) FROM information_schema.tables WHERE '
               "table_schema='public';")],
@@ -488,12 +502,15 @@ class TestWeb(unittest.TestCase):
 class TestCeleryWorker(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        create_django_bootstrap_container(
+        cls.worker_container = create_django_bootstrap_container(
             docker_helper, 'worker', command=['celery', 'worker'],
             publish_port=False)
-        docker_helper.start_container('worker', r'celery@\w+ ready')
+        docker_helper.start_container(
+            cls.worker_container, r'celery@\w+ ready')
 
-        cls.worker_container = docker_helper.get_container('worker')
+    @classmethod
+    def tearDownClass(cls):
+        docker_helper.stop_and_remove_container(cls.worker_container)
 
     def test_expected_processes(self):
         """
@@ -524,12 +541,15 @@ class TestCeleryWorker(unittest.TestCase):
 class TestCeleryBeat(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        create_django_bootstrap_container(
+        cls.beat_container = create_django_bootstrap_container(
             docker_helper, 'beat', command=['celery', 'beat'],
             publish_port=False)
-        docker_helper.start_container('beat', r'beat: Starting\.\.\.')
+        docker_helper.start_container(
+            cls.beat_container, r'beat: Starting\.\.\.')
 
-        cls.beat_container = docker_helper.get_container('beat')
+    @classmethod
+    def tearDownClass(cls):
+        docker_helper.stop_and_remove_container(cls.beat_container)
 
     def test_expected_processes(self):
         """
