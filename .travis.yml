@@ -17,7 +17,7 @@ before_install:
   - sudo apt-get update
   - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-ce
 install:
-  - pip install -r example/requirements-test.txt
+  - (cd example; pip install -r requirements-test.txt)
 
 before_script:
   - image="praekeltfoundation/django-bootstrap:$VARIANT"

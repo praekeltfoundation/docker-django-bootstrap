@@ -2,12 +2,9 @@
 import json
 import re
 import sys
-import _thread as thread
-import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 
-import docker
 import iso8601
 import requests
 from testtools.assertions import assert_that
@@ -15,6 +12,8 @@ from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength, Is,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
+
+from docker_helper import DockerHelper, list_container_processes, output_lines
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
 POSTGRES_PARAMS = {
@@ -35,142 +34,6 @@ DATABASE_URL = (
     'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
 BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
-
-
-def resource_name(name, namespace='test'):
-    return '{}_{}'.format(namespace, name)
-
-
-def quit_function(fn_name):
-    # https://stackoverflow.com/a/31667005
-    print('{} took too long'.format(fn_name), file=sys.stderr)
-    sys.stderr.flush()  # Python 3 stderr is likely buffered.
-    # FIXME: Interrupting the main thread is hacky
-    thread.interrupt_main()  # raises KeyboardInterrupt
-
-
-def exit_after(s):
-    """
-    Use as decorator to exit process if function takes longer than s seconds
-    https://stackoverflow.com/a/31667005
-    """
-    def outer(fn):
-        def inner(*args, **kwargs):
-            timer = threading.Timer(s, quit_function, args=[fn.__name__])
-            timer.start()
-            try:
-                result = fn(*args, **kwargs)
-            finally:
-                timer.cancel()
-            return result
-        return inner
-    return outer
-
-
-@exit_after(10)
-def wait_for_log_line(container, pattern):
-    for line in container.logs(stream=True):
-        line = line.decode('utf-8').rstrip()  # Drop the trailing newline
-        if re.search(pattern, line):
-            return line
-
-
-def output_lines(raw_output, encoding='utf-8'):
-    decoded = raw_output.decode(encoding)
-    lines = decoded.split('\n')
-    # Remove extra newline at end of output
-    lines.pop()
-    return lines
-
-
-def list_container_processes(container):
-    ps_output = container.exec_run(
-        ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
-    ps_lines = output_lines(ps_output)
-
-    ps_data = []
-    for line in ps_lines:
-        # Tuple of process information: user, PID, name
-        parts = line.split(None, 2)
-        if not parts[2].startswith('ps ax'):
-            ps_data.append((int(parts[0]), parts[1], parts[2]))
-
-    return ps_data
-
-
-class DockerHelper(object):
-    def setup(self):
-        self._client = docker.client.from_env()
-        self._network = self._client.networks.create(
-            resource_name('default'), driver='bridge')
-        self._container_ids = []
-
-    def teardown(self):
-        # Remove all containers
-        for container_id in self._container_ids:
-            # Check if the container exists before trying to remove it
-            try:
-                container = self._client.containers.get(container_id)
-            except docker.errors.NotFound:
-                continue
-
-            print("Warning container '{}' was still running".format(
-                container.name))
-
-            self.stop_and_remove_container(container)
-
-        # Remove the network
-        self._network.remove()
-
-    def create_container(self, name, image, **kwargs):
-        container_name = resource_name(name)
-        print("Creating container '{}'...".format(container_name))
-        container = self._client.containers.create(
-            image, name=container_name, detach=True, network=self._network.id,
-            **kwargs)
-
-        # FIXME: Hack to make sure the container has the right network aliases.
-        # If we don't specify a network when the container is created then the
-        # default bridge network is attached which we don't want.
-        self._network.disconnect(container)
-        self._network.connect(container, aliases=[name])
-
-        # Keep a reference to created containers to make sure they are cleaned
-        # up
-        self._container_ids.append(container.id)
-
-        return container
-
-    def start_container(self, container, log_line_pattern):
-        print("Starting container '{}'...".format(container.name))
-        container.start()
-        print(wait_for_log_line(container, log_line_pattern))
-        container.reload()
-        print("Container status: '{}'".format(container.status))
-        assert container.status == 'running'
-        print()
-
-    def stop_and_remove_container(
-            self, container, stop_timeout=5, remove_force=True):
-        print("Stopping container '{}'...".format(container.name))
-        container.stop(timeout=stop_timeout)
-        print("Removing container '{}'...".format(container.name))
-        container.remove(force=remove_force)
-        print()
-
-    def pull_image_if_not_found(self, image):
-        try:
-            self._client.images.get(image)
-            print("Image '{}' found".format(image))
-        except docker.errors.ImageNotFound:
-            print("Pulling image '{}'...".format(image))
-            self._client.images.pull(image)
-
-    def get_container_host_port(self, container, container_port, index=0):
-        # FIXME: Bit of a hack to get the port number on the host
-        inspection = self._client.api.inspect_container(container.id)
-        return (inspection['NetworkSettings']['Ports']
-                [container_port][index]['HostPort'])
 
 
 docker_helper = DockerHelper()
