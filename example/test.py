@@ -13,8 +13,8 @@ import requests
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength, Is,
-    LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesRegex,
-    MatchesSetwise, Not)
+    LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
+    MatchesRegex, MatchesSetwise, Not)
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
 POSTGRES_PARAMS = {
@@ -536,6 +536,24 @@ class TestCeleryWorker(unittest.TestCase):
              '/usr/local/bin/python /usr/local/bin/celery worker '
              '--concurrency 1'),
         ])))
+
+    def test_amqp_queues_created(self):
+        """
+        When the worker container is running, the three default Celery queues
+        should have been created in RabbitMQ.
+        """
+        rabbitmq_output = infra_containers['amqp'].exec_run(
+            ['rabbitmqctl', '-q', 'list_queues', '-p', '/mysite'])
+        rabbitmq_lines = rabbitmq_output.decode('utf-8').split('\n')
+        rabbitmq_lines.pop()
+        rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
+
+        assert_that(rabbitmq_data, HasLength(3))
+        assert_that(rabbitmq_data, MatchesListwise(list(map(MatchesListwise, (
+            [Equals('celery'), Equals('0')],
+            [MatchesRegex(r'^celeryev\..+'), Equals('0')],
+            [MatchesRegex(r'^celery@.+\.celery\.pidbox$'), Equals('0')],
+        )))))
 
 
 class TestCeleryBeat(unittest.TestCase):
