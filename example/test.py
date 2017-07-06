@@ -75,11 +75,18 @@ def wait_for_log_line(container, pattern):
             return line
 
 
+def output_lines(raw_output, encoding='utf-8'):
+    decoded = raw_output.decode(encoding)
+    lines = decoded.split('\n')
+    # Remove extra newline at end of output
+    lines.pop()
+    return lines
+
+
 def list_container_processes(container):
     ps_output = container.exec_run(
         ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
-    ps_lines = ps_output.decode('utf-8').split('\n')
-    ps_lines.pop()
+    ps_lines = output_lines(ps_output)
 
     ps_data = []
     for line in ps_lines:
@@ -363,7 +370,7 @@ class TestWeb(unittest.TestCase):
         hashed_svg = self.web_container.exec_run(
             ['find', 'static/admin/img', '-regextype', 'posix-egrep', '-regex',
              '.*\.[a-f0-9]{12}\.svg$'])
-        test_file = hashed_svg.decode('utf-8').split('\n')[0]
+        test_file = output_lines(hashed_svg)[0]
 
         response = self.get('/' + test_file)
 
@@ -379,7 +386,7 @@ class TestWeb(unittest.TestCase):
         """
         compressed_js = self.web_container.exec_run(
             ['find', 'static/CACHE/js', '-name', '*.js'])
-        test_file = compressed_js.decode('utf-8').split('\n')[0]
+        test_file = output_lines(compressed_js)[0]
 
         response = self.get('/' + test_file)
 
@@ -396,7 +403,7 @@ class TestWeb(unittest.TestCase):
         """
         compressed_js = self.web_container.exec_run(
             ['find', 'static/CACHE/css', '-name', '*.css'])
-        test_file = compressed_js.decode('utf-8').split('\n')[0]
+        test_file = output_lines(compressed_js)[0]
 
         response = self.get('/' + test_file)
 
@@ -412,7 +419,7 @@ class TestWeb(unittest.TestCase):
         """
         css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
-        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+        test_file = output_lines(css_to_gzip)[0]
 
         response = self.get('/' + test_file,
                             headers={'Accept-Encoding': 'gzip'})
@@ -429,7 +436,7 @@ class TestWeb(unittest.TestCase):
         """
         woff_to_not_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.woff', '-size', '+1024c'])
-        test_file = woff_to_not_gzip.decode('utf-8').split('\n')[0]
+        test_file = output_lines(woff_to_not_gzip)[0]
 
         response = self.get('/' + test_file,
                             headers={'Accept-Encoding': 'gzip'})
@@ -450,7 +457,7 @@ class TestWeb(unittest.TestCase):
         """
         css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
-        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+        test_file = output_lines(css_to_gzip)[0]
 
         response = self.get('/' + test_file,
                             headers={'Accept-Encoding': ''})
@@ -469,7 +476,7 @@ class TestWeb(unittest.TestCase):
         """
         css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
-        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+        test_file = output_lines(css_to_gzip)[0]
 
         response = self.get(
             '/' + test_file,
@@ -487,7 +494,7 @@ class TestWeb(unittest.TestCase):
         """
         css_to_gzip = self.web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '-1024c'])
-        test_file = css_to_gzip.decode('utf-8').split('\n')[0]
+        test_file = output_lines(css_to_gzip)[0]
 
         response = self.get('/' + test_file,
                             headers={'Accept-Encoding': 'gzip'})
@@ -544,8 +551,7 @@ class TestCeleryWorker(unittest.TestCase):
         """
         rabbitmq_output = infra_containers['amqp'].exec_run(
             ['rabbitmqctl', '-q', 'list_queues', '-p', '/mysite'])
-        rabbitmq_lines = rabbitmq_output.decode('utf-8').split('\n')
-        rabbitmq_lines.pop()
+        rabbitmq_lines = output_lines(rabbitmq_output)
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
 
         assert_that(rabbitmq_data, HasLength(3))
