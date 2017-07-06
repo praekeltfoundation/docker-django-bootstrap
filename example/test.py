@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import logging
-import re
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -10,7 +9,7 @@ import iso8601
 import requests
 from testtools.assertions import assert_that
 from testtools.matchers import (
-    AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength, Is,
+    AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
@@ -179,26 +178,26 @@ class TestWeb(unittest.TestCase):
         When a request has been made to the container, Nginx logs access logs
         to stdout
         """
-        logs = (self.web_container
-                .logs(stdout=True, stderr=False).decode('utf-8'))
+        # Make a request to see the logs for it
+        self.get('/')
 
-        match = re.search(r'\{ "time": .+', logs)
-        assert_that(match, Not(Is(None)))
-
-        access_json = json.loads(match.group(0))
+        # Get the last line of stdout, which should be the access log entry for
+        # the request we just made
+        log_line = (self.web_container
+                    .logs(stdout=True, stderr=False, tail=1).decode('utf-8'))
+        assert_that(log_line, MatchesRegex(r'^\{ "time": .+'))
 
         now = datetime.now(timezone.utc)
-        assert_that(access_json, MatchesDict({
+        assert_that(json.loads(log_line), MatchesDict({
             # Assert time is valid and recent
             'time': After(iso8601.parse_date, MatchesAll(
                 MatchesAny(LessThan(now), Equals(now)),
                 MatchesAny(GreaterThan(now - timedelta(seconds=5)))
             )),
 
-            # FIXME: These assertions rely on the previous test running first
-            'request': Equals('GET /admin/ HTTP/1.1'),
-            'status': Equals(302),
-            'body_bytes_sent': Equals(0),
+            'request': Equals('GET / HTTP/1.1'),
+            'status': Equals(404),
+            'body_bytes_sent': GreaterThan(0),
             'request_time': LessThan(1.0),
             'http_referer': Equals(''),
 
