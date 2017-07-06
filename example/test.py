@@ -124,23 +124,23 @@ class TestWeb(unittest.TestCase):
         assert_that(ps_data, HasLength(5))
 
         assert_that(ps_data.pop(0), Equals(
-            (1, 'root',
-             'tini -- django-entrypoint.sh mysite.wsgi:application')))
+            ['1', 'root',
+             'tini -- django-entrypoint.sh mysite.wsgi:application']))
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
         assert_that(ps_data, MatchesSetwise(*map(Equals, [
-            ('root', 'nginx: master process nginx -g daemon off;'),
-            ('nginx', 'nginx: worker process'),
-            ('django',
+            ['root', 'nginx: master process nginx -g daemon off;'],
+            ['nginx', 'nginx: worker process'],
+            ['django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
             # No obvious way to differentiate Gunicorn master from worker
-            ('django',
+            ['django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
         ])))
 
     def test_database_tables_created(self):
@@ -392,19 +392,19 @@ class TestCeleryWorker(unittest.TestCase):
         assert_that(ps_data, HasLength(3))
 
         assert_that(ps_data.pop(0), Equals(
-            (1, 'root',
-             'tini -- django-entrypoint.sh celery worker')))
+            ['1', 'root',
+             'tini -- django-entrypoint.sh celery worker']))
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
         assert_that(ps_data, MatchesSetwise(*map(Equals, [
-            ('django',
+            ['django',
              '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1'),
+             '--concurrency 1'],
             # No obvious way to differentiate Celery master from worker
-            ('django',
+            ['django',
              '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1'),
+             '--concurrency 1'],
         ])))
 
     def test_amqp_queues_created(self):
@@ -447,10 +447,10 @@ class TestCeleryBeat(unittest.TestCase):
 
         assert_that(ps_data, HasLength(2))
         assert_that(ps_data[0], Equals(
-            (1, 'root', 'tini -- django-entrypoint.sh celery beat')))
+            ['1', 'root', 'tini -- django-entrypoint.sh celery beat']))
         # We don't know what PID we will get, so don't check it
         assert_that(ps_data[1][1:], Equals(
-            ('django', '/usr/local/bin/python /usr/local/bin/celery beat')))
+            ['django', '/usr/local/bin/python /usr/local/bin/celery beat']))
 
 
 if __name__ == '__main__':

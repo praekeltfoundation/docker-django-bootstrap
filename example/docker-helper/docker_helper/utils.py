@@ -51,16 +51,10 @@ def output_lines(raw_output, encoding='utf-8'):
     return lines
 
 
-def list_container_processes(container):
-    ps_output = container.exec_run(
-        ['ps', 'ax', '-o', 'pid,ruser,command', '--no-headers'])
+def list_container_processes(container, columns=['pid', 'ruser', 'args']):
+    ps_output = container.exec_run(['ps', 'ax', '-o', ','.join(columns)])
     ps_lines = output_lines(ps_output)
+    ps_lines.pop(0)  # Skip the header
+    ps_lines.pop()  # Drop the entry for the ps command itself
 
-    ps_data = []
-    for line in ps_lines:
-        # Tuple of process information: user, PID, name
-        parts = line.split(None, 2)
-        if not parts[2].startswith('ps ax'):
-            ps_data.append((int(parts[0]), parts[1], parts[2]))
-
-    return ps_data
+    return [line.split(None, max(0, len(columns) - 1)) for line in ps_lines]
