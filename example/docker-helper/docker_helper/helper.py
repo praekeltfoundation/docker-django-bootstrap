@@ -1,6 +1,10 @@
+import logging
+
 import docker
 
 from .utils import resource_name, wait_for_log_line
+
+log = logging.getLogger(__name__)
 
 
 class DockerHelper(object):
@@ -29,7 +33,7 @@ class DockerHelper(object):
 
     def create_container(self, name, image, **kwargs):
         container_name = resource_name(name)
-        print("Creating container '{}'...".format(container_name))
+        log.info("Creating container '{}'...".format(container_name))
         container = self._client.containers.create(
             image, name=container_name, detach=True, network=self._network.id,
             **kwargs)
@@ -47,28 +51,26 @@ class DockerHelper(object):
         return container
 
     def start_container(self, container, log_line_pattern):
-        print("Starting container '{}'...".format(container.name))
+        log.info("Starting container '{}'...".format(container.name))
         container.start()
-        print(wait_for_log_line(container, log_line_pattern))
+        log.debug(wait_for_log_line(container, log_line_pattern))
         container.reload()
-        print("Container status: '{}'".format(container.status))
+        log.debug("Container status: '{}'".format(container.status))
         assert container.status == 'running'
-        print()
 
     def stop_and_remove_container(
             self, container, stop_timeout=5, remove_force=True):
-        print("Stopping container '{}'...".format(container.name))
+        log.info("Stopping container '{}'...".format(container.name))
         container.stop(timeout=stop_timeout)
-        print("Removing container '{}'...".format(container.name))
+        log.info("Removing container '{}'...".format(container.name))
         container.remove(force=remove_force)
-        print()
 
     def pull_image_if_not_found(self, image):
         try:
             self._client.images.get(image)
-            print("Image '{}' found".format(image))
+            log.debug("Image '{}' found".format(image))
         except docker.errors.ImageNotFound:
-            print("Pulling image '{}'...".format(image))
+            log.info("Pulling image '{}'...".format(image))
             self._client.images.pull(image)
 
     def get_container_host_port(self, container, container_port, index=0):

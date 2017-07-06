@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import logging
 import re
 import sys
 import unittest
@@ -457,5 +458,8 @@ if __name__ == '__main__':
     # FIXME: Maybe pytest is better at this
     if len(sys.argv) > 1:
         DJANGO_BOOTSTRAP_IMAGE = sys.argv.pop()
+
+    logging.basicConfig(stream=sys.stderr)
+    logging.getLogger('docker_helper.helper').setLevel(logging.INFO)
 
     unittest.main()
