@@ -555,11 +555,11 @@ class TestCeleryWorker(unittest.TestCase):
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
 
         assert_that(rabbitmq_data, HasLength(3))
-        assert_that(rabbitmq_data, MatchesListwise(list(map(MatchesListwise, (
+        assert_that(rabbitmq_data, MatchesSetwise(*map(MatchesListwise, (
             [Equals('celery'), Equals('0')],
             [MatchesRegex(r'^celeryev\..+'), Equals('0')],
             [MatchesRegex(r'^celery@.+\.celery\.pidbox$'), Equals('0')],
-        )))))
+        ))))
 
 
 class TestCeleryBeat(unittest.TestCase):
