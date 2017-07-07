@@ -9,22 +9,8 @@ A `setup.py` was added to install dependencies. An example [Django settings file
 [django-compressor](https://django-compressor.readthedocs.io) is set up to compress some JavaScript and CSS in a dummy template.
 
 ## Usage
-A [Docker Compose file](docker-compose.yml) is provided that sets up some infrastructure (RabbitMQ and PostgreSQL instances) for the container to use.
-
-To get started:
-```shell
-# Pick the Python version to use (defaults to py3)
-export VARIANT=py2
-
-# Bring up the infrastructure: PostgreSQL and RabbitMQ
-docker-compose up -d db amqp && sleep
-
-# Bring everything else up
-docker-compose up
+To build the example site Docker image and run tests on it, use these commands:
 ```
-
-To connect to the website, get its address on the host using
-```shell
-docker-compose port web 8000
+docker build --tag mysite .
+python test.py mysite
 ```
-...and enter that into your browser (you may be more interested in `/admin`).
