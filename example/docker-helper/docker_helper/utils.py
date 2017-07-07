@@ -52,6 +52,11 @@ def output_lines(raw_output, encoding='utf-8'):
 
 
 def list_container_processes(container, columns=['pid', 'ruser', 'args']):
+    # We use an exec here rather than `container.top()` because we want to run
+    # 'ps' inside the container. This is because we want to get PIDs and
+    # usernames in the container's namespaces. `container.top()` uses 'ps' from
+    # outside the container in the host's namespaces. Note that this requires
+    # the container to have a 'ps' that responds to the arguments we give it.
     ps_output = container.exec_run(['ps', 'ax', '-o', ','.join(columns)])
     ps_lines = output_lines(ps_output)
     ps_lines.pop(0)  # Skip the header
