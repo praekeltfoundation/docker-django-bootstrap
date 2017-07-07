@@ -183,8 +183,13 @@ class TestWeb(unittest.TestCase):
 
         # Get the last line of stdout, which should be the access log entry for
         # the request we just made
-        log_line = (self.web_container
-                    .logs(stdout=True, stderr=False, tail=1).decode('utf-8'))
+        # FIXME: Sometimes for the last line we just get an empty string, so we
+        # have to try process the last 2
+        last_log_lines = (
+            self.web_container.logs(stdout=True, stderr=False, tail=2)
+            .decode('utf-8').split('\n'))
+        log_line = last_log_lines[1] or last_log_lines[0]
+
         assert_that(log_line, MatchesRegex(r'^\{ "time": .+'))
 
         now = datetime.now(timezone.utc)
