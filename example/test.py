@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import sys
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 
@@ -179,12 +180,17 @@ class TestWeb(unittest.TestCase):
         When a request has been made to the container, Nginx logs access logs
         to stdout
         """
+        # Wait a little bit so that previous tests' requests have been written
+        # to the log.
+        time.sleep(0.2)
         before_lines = output_lines(
             self.web_container.logs(stdout=True, stderr=False))
 
         # Make a request to see the logs for it
         self.get('/')
 
+        # Wait a little bit so that our request has been written to the log.
+        time.sleep(0.2)
         after_lines = output_lines(
             self.web_container.logs(stdout=True, stderr=False))
 
