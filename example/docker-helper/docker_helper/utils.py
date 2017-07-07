@@ -44,11 +44,7 @@ def wait_for_log_line(container, pattern):
 
 
 def output_lines(raw_output, encoding='utf-8'):
-    decoded = raw_output.decode(encoding)
-    lines = decoded.split('\n')
-    # Remove extra newline at end of output
-    lines.pop()
-    return lines
+    return raw_output.decode(encoding).splitlines()
 
 
 def list_container_processes(container, columns=['pid', 'ruser', 'args']):
