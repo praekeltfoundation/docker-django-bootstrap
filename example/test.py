@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import logging
+import re
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -178,22 +179,24 @@ class TestWeb(unittest.TestCase):
         When a request has been made to the container, Nginx logs access logs
         to stdout
         """
+        before_lines = output_lines(
+            self.web_container.logs(stdout=True, stderr=False))
+
         # Make a request to see the logs for it
         self.get('/')
 
-        # Get the last line of stdout, which should be the access log entry for
-        # the request we just made
-        # FIXME: Sometimes for the last line we just get an empty string, so we
-        # have to try process the last 2
-        last_log_lines = (
-            self.web_container.logs(stdout=True, stderr=False, tail=2)
-            .decode('utf-8').split('\n'))
-        log_line = last_log_lines[1] or last_log_lines[0]
+        after_lines = output_lines(
+            self.web_container.logs(stdout=True, stderr=False))
 
-        assert_that(log_line, MatchesRegex(r'^\{ "time": .+'))
+        new_lines = after_lines[len(before_lines):]
+        assert_that(len(new_lines), GreaterThan(0))
+
+        # Find the Nginx log line
+        nginx_lines = [l for l in new_lines if re.match(r'^\{ "time": .+', l)]
+        assert_that(nginx_lines, HasLength(1))
 
         now = datetime.now(timezone.utc)
-        assert_that(json.loads(log_line), MatchesDict({
+        assert_that(json.loads(nginx_lines[0]), MatchesDict({
             # Assert time is valid and recent
             'time': After(iso8601.parse_date, MatchesAll(
                 MatchesAny(LessThan(now), Equals(now)),
