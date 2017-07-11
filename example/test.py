@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 import json
-import logging
+import os
 import re
-import sys
 import time
-import unittest
 from datetime import datetime, timedelta, timezone
 
 import iso8601
+import pytest
 import requests
 from testtools.assertions import assert_that
 from testtools.matchers import (
@@ -31,24 +30,23 @@ RABBITMQ_PARAMS = {
     'user': 'mysite',
     'password': 'secret',
 }
-DJANGO_BOOTSTRAP_IMAGE = 'mysite:py3'
+DJANGO_BOOTSTRAP_IMAGE = os.environ.get('DJANGO_BOOTSTRAP_IMAGE', 'mysite:py3')
 DATABASE_URL = (
     'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
 BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
 
 
-docker_helper = DockerHelper()
-infra_containers = {}
-
-
-def setUpModule():
+@pytest.fixture(scope='module')
+def docker_helper():
+    docker_helper = DockerHelper()
     docker_helper.setup()
-    setup_db()
-    setup_amqp()
+    yield docker_helper
+    docker_helper.teardown()
 
 
-def setup_db():
+@pytest.fixture(scope='module')
+def db_container(docker_helper):
     docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
 
     container = docker_helper.create_container(
@@ -60,11 +58,12 @@ def setup_db():
     docker_helper.start_container(
         container,
         r'database system is ready to accept connections')
+    yield container
+    docker_helper.stop_and_remove_container(container)
 
-    infra_containers['db'] = container
 
-
-def setup_amqp():
+@pytest.fixture(scope='module')
+def amqp_container(docker_helper):
     docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
 
     container = docker_helper.create_container(
@@ -74,14 +73,8 @@ def setup_amqp():
             'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
         })
     docker_helper.start_container(container, r'Server startup complete')
-
-    infra_containers['amqp'] = container
-
-
-def tearDownModule():
-    for container in infra_containers.values():
-        docker_helper.stop_and_remove_container(container)
-    docker_helper.teardown()
+    yield container
+    docker_helper.stop_and_remove_container(container)
 
 
 def create_django_bootstrap_container(
@@ -102,26 +95,33 @@ def create_django_bootstrap_container(
         name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
 
 
-class TestWeb(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.web_container = create_django_bootstrap_container(
-            docker_helper, 'web')
-        docker_helper.start_container(cls.web_container, r'Booting worker')
+@pytest.fixture(scope='class')
+def web_container(docker_helper, db_container, amqp_container):
+    container = create_django_bootstrap_container(
+        docker_helper, 'web')
+    docker_helper.start_container(container, r'Booting worker')
+    yield container
+    docker_helper.stop_and_remove_container(container)
 
-        cls.web_port = docker_helper.get_container_host_port(
-            cls.web_container, '8000/tcp')
 
-    @classmethod
-    def tearDownClass(cls):
-        docker_helper.stop_and_remove_container(cls.web_container)
+@pytest.fixture(scope='class')
+def web_client(docker_helper, web_container):
+    port = docker_helper.get_container_host_port(web_container, '8000/tcp')
 
-    def test_expected_processes(self):
+    def client(path, method='GET', **kwargs):
+        return requests.request(
+            method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
+
+    return client
+
+
+class TestWeb(object):
+    def test_expected_processes(self, web_container):
         """
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_data = list_container_processes(self.web_container)
+        ps_data = list_container_processes(web_container)
 
         assert_that(ps_data, HasLength(5))
 
@@ -145,12 +145,12 @@ class TestWeb(unittest.TestCase):
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
         ])))
 
-    def test_database_tables_created(self):
+    def test_database_tables_created(self, db_container, web_container):
         """
         When the web container is running, a migration should have completed
         and there should be some tables in the database.
         """
-        psql_output = infra_containers['db'].exec_run(
+        psql_output = db_container.exec_run(
             ['psql', '-qtA', '--dbname', 'mysite', '-c',
              ('SELECT COUNT(*) FROM information_schema.tables WHERE '
               "table_schema='public';")],
@@ -159,23 +159,19 @@ class TestWeb(unittest.TestCase):
         count = int(psql_output.strip())
         assert_that(count, GreaterThan(0))
 
-    def get(self, path, **kwargs):
-        return requests.get(
-            'http://127.0.0.1:{}{}'.format(self.web_port, path), **kwargs)
-
-    def test_admin_site_live(self):
+    def test_admin_site_live(self, web_client):
         """
         When we get the /admin/ path, we should receive some HTML for the
         Django admin interface.
         """
-        response = self.get('/admin/')
+        response = web_client('/admin/')
 
         assert_that(response.headers['Content-Type'],
                     Equals('text/html; charset=utf-8'))
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
 
-    def test_nginx_access_logs(self):
+    def test_nginx_access_logs(self, web_container, web_client):
         """
         When a request has been made to the container, Nginx logs access logs
         to stdout
@@ -184,15 +180,15 @@ class TestWeb(unittest.TestCase):
         # to the log.
         time.sleep(0.2)
         before_lines = output_lines(
-            self.web_container.logs(stdout=True, stderr=False))
+            web_container.logs(stdout=True, stderr=False))
 
         # Make a request to see the logs for it
-        self.get('/')
+        web_client('/')
 
         # Wait a little bit so that our request has been written to the log.
         time.sleep(0.2)
         after_lines = output_lines(
-            self.web_container.logs(stdout=True, stderr=False))
+            web_container.logs(stdout=True, stderr=False))
 
         new_lines = after_lines[len(before_lines):]
         assert_that(len(new_lines), GreaterThan(0))
@@ -218,7 +214,7 @@ class TestWeb(unittest.TestCase):
             # Assert remote_addr is an IPv4 (roughly)
             'remote_addr': MatchesRegex(
                 r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'),
-            'http_host': Equals('127.0.0.1:{}'.format(self.web_port)),
+            'http_host': MatchesRegex(r'^127.0.0.1:\d{4,5}$'),
             'http_user_agent': MatchesRegex(r'^python-requests/'),
 
             # Not very interesting empty fields
@@ -228,95 +224,95 @@ class TestWeb(unittest.TestCase):
             'http_x_forwarded_for': Equals(''),
         }))
 
-    def test_static_file(self):
+    def test_static_file(self, web_client):
         """
         When a static file is requested, Nginx should serve the file with the
         correct mime type.
         """
-        response = self.get('/static/admin/css/base.css')
+        response = web_client('/static/admin/css/base.css')
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.text, Contains('DJANGO Admin styles'))
 
-    def test_manifest_static_storage_file(self):
+    def test_manifest_static_storage_file(self, web_container, web_client):
         """
         When a static file that was processed by Django's
         ManifestStaticFilesStorage system is requested, that file should be
         served with a far-future 'Cache-Control' header.
         """
-        hashed_svg = self.web_container.exec_run(
+        hashed_svg = web_container.exec_run(
             ['find', 'static/admin/img', '-regextype', 'posix-egrep', '-regex',
              '.*\.[a-f0-9]{12}\.svg$'])
         test_file = output_lines(hashed_svg)[0]
 
-        response = self.get('/' + test_file)
+        response = web_client('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('image/svg+xml'))
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
-    def test_django_compressor_js_file(self):
+    def test_django_compressor_js_file(self, web_container, web_client):
         """
         When a static JavaScript file that was processed by django_compressor
         is requested, that file should be served with a far-future
         'Cache-Control' header.
         """
-        compressed_js = self.web_container.exec_run(
+        compressed_js = web_container.exec_run(
             ['find', 'static/CACHE/js', '-name', '*.js'])
         test_file = output_lines(compressed_js)[0]
 
-        response = self.get('/' + test_file)
+        response = web_client('/' + test_file)
 
         assert_that(response.headers['Content-Type'],
                     Equals('application/javascript'))
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
-    def test_django_compressor_css_file(self):
+    def test_django_compressor_css_file(self, web_container, web_client):
         """
         When a static CSS file that was processed by django_compressor is
         requested, that file should be served with a far-future 'Cache-Control'
         header.
         """
-        compressed_js = self.web_container.exec_run(
+        compressed_js = web_container.exec_run(
             ['find', 'static/CACHE/css', '-name', '*.css'])
         test_file = output_lines(compressed_js)[0]
 
-        response = self.get('/' + test_file)
+        response = web_client('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
-    def test_gzip_css_compressed(self):
+    def test_gzip_css_compressed(self, web_container, web_client):
         """
         When a CSS file larger than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should be served gzipped.
         """
-        css_to_gzip = self.web_container.exec_run(
+        css_to_gzip = web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
         test_file = output_lines(css_to_gzip)[0]
 
-        response = self.get('/' + test_file,
-                            headers={'Accept-Encoding': 'gzip'})
+        response = web_client('/' + test_file,
+                              headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
-    def test_gzip_woff_not_compressed(self):
+    def test_gzip_woff_not_compressed(self, web_container, web_client):
         """
         When a .woff file larger than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should not be served gzipped as it is already a compressed format.
         """
-        woff_to_not_gzip = self.web_container.exec_run(
+        woff_to_not_gzip = web_container.exec_run(
             ['find', 'static', '-name', '*.woff', '-size', '+1024c'])
         test_file = output_lines(woff_to_not_gzip)[0]
 
-        response = self.get('/' + test_file,
-                            headers={'Accept-Encoding': 'gzip'})
+        response = web_client('/' + test_file,
+                              headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'],
                     Equals('application/font-woff'))
@@ -325,19 +321,19 @@ class TestWeb(unittest.TestCase):
             Not(Contains('Vary')),
         ))
 
-    def test_gzip_accept_encoding_respected(self):
+    def test_gzip_accept_encoding_respected(self, web_container, web_client):
         """
         When a CSS file larger than 1024 bytes is requested and the
         'Accept-Encoding' header does not list gzip as an accepted encoding,
         the file should not be served gzipped, but the 'Vary' header should be
         set to 'Accept-Encoding'.
         """
-        css_to_gzip = self.web_container.exec_run(
+        css_to_gzip = web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
         test_file = output_lines(css_to_gzip)[0]
 
-        response = self.get('/' + test_file,
-                            headers={'Accept-Encoding': ''})
+        response = web_client('/' + test_file,
+                              headers={'Accept-Encoding': ''})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers, Not(Contains('Content-Encoding')))
@@ -345,17 +341,17 @@ class TestWeb(unittest.TestCase):
         # file will be served with a different encoding.
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
-    def test_gzip_via_compressed(self):
+    def test_gzip_via_compressed(self, web_container, web_client):
         """
         When a CSS file larger than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding and the
         'Via' header is set, the file should be served gzipped.
         """
-        css_to_gzip = self.web_container.exec_run(
+        css_to_gzip = web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '+1024c'])
         test_file = output_lines(css_to_gzip)[0]
 
-        response = self.get(
+        response = web_client(
             '/' + test_file,
             headers={'Accept-Encoding': 'gzip', 'Via': 'Internet.org'})
 
@@ -363,18 +359,18 @@ class TestWeb(unittest.TestCase):
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
-    def test_gzip_small_file_not_compressed(self):
+    def test_gzip_small_file_not_compressed(self, web_container, web_client):
         """
         When a CSS file smaller than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should not be served gzipped.
         """
-        css_to_gzip = self.web_container.exec_run(
+        css_to_gzip = web_container.exec_run(
             ['find', 'static', '-name', '*.css', '-size', '-1024c'])
         test_file = output_lines(css_to_gzip)[0]
 
-        response = self.get('/' + test_file,
-                            headers={'Accept-Encoding': 'gzip'})
+        response = web_client('/' + test_file,
+                              headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers, MatchesAll(
@@ -383,25 +379,23 @@ class TestWeb(unittest.TestCase):
         ))
 
 
-class TestCeleryWorker(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.worker_container = create_django_bootstrap_container(
-            docker_helper, 'worker', command=['celery', 'worker'],
-            publish_port=False)
-        docker_helper.start_container(
-            cls.worker_container, r'celery@\w+ ready')
+@pytest.fixture(scope='class')
+def worker_container(docker_helper, amqp_container):
+    container = create_django_bootstrap_container(
+        docker_helper, 'worker', command=['celery', 'worker'],
+        publish_port=False)
+    docker_helper.start_container(container, r'celery@\w+ ready')
+    yield container
+    docker_helper.stop_and_remove_container(container)
 
-    @classmethod
-    def tearDownClass(cls):
-        docker_helper.stop_and_remove_container(cls.worker_container)
 
-    def test_expected_processes(self):
+class TestCeleryWorker(object):
+    def test_expected_processes(self, worker_container):
         """
         When the container is running, there should be 3 running processes:
         tini, and the Celery worker master and worker.
         """
-        ps_data = list_container_processes(self.worker_container)
+        ps_data = list_container_processes(worker_container)
 
         assert_that(ps_data, HasLength(3))
 
@@ -421,12 +415,12 @@ class TestCeleryWorker(unittest.TestCase):
              '--concurrency 1'],
         ])))
 
-    def test_amqp_queues_created(self):
+    def test_amqp_queues_created(self, amqp_container):
         """
         When the worker container is running, the three default Celery queues
         should have been created in RabbitMQ.
         """
-        rabbitmq_output = infra_containers['amqp'].exec_run(
+        rabbitmq_output = amqp_container.exec_run(
             ['rabbitmqctl', '-q', 'list_queues', '-p', '/mysite'])
         rabbitmq_lines = output_lines(rabbitmq_output)
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
@@ -439,25 +433,23 @@ class TestCeleryWorker(unittest.TestCase):
         ))))
 
 
-class TestCeleryBeat(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.beat_container = create_django_bootstrap_container(
-            docker_helper, 'beat', command=['celery', 'beat'],
-            publish_port=False)
-        docker_helper.start_container(
-            cls.beat_container, r'beat: Starting\.\.\.')
+@pytest.fixture(scope='class')
+def beat_container(docker_helper, amqp_container):
+    container = create_django_bootstrap_container(
+        docker_helper, 'beat', command=['celery', 'beat'],
+        publish_port=False)
+    docker_helper.start_container(container, r'beat: Starting\.\.\.')
+    yield container
+    docker_helper.stop_and_remove_container(container)
 
-    @classmethod
-    def tearDownClass(cls):
-        docker_helper.stop_and_remove_container(cls.beat_container)
 
-    def test_expected_processes(self):
+class TestCeleryBeat(object):
+    def test_expected_processes(self, beat_container):
         """
         When the container is running, there should be 2 running processes:
         tini, and the Celery beat process.
         """
-        ps_data = list_container_processes(self.beat_container)
+        ps_data = list_container_processes(beat_container)
 
         assert_that(ps_data, HasLength(2))
         assert_that(ps_data[0], Equals(
@@ -465,14 +457,3 @@ class TestCeleryBeat(unittest.TestCase):
         # We don't know what PID we will get, so don't check it
         assert_that(ps_data[1][1:], Equals(
             ['django', '/usr/local/bin/python /usr/local/bin/celery beat']))
-
-
-if __name__ == '__main__':
-    # FIXME: Maybe pytest is better at this
-    if len(sys.argv) > 1:
-        DJANGO_BOOTSTRAP_IMAGE = sys.argv.pop()
-
-    logging.basicConfig(stream=sys.stderr)
-    logging.getLogger('docker_helper.helper').setLevel(logging.INFO)
-
-    unittest.main()
