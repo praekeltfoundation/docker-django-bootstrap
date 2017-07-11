@@ -41,9 +41,7 @@ def bool_environ(key):
     value = os.environ.get(key)
     if value is None:
         return False
-
-    value = value.lower()
-    return value == '1' or value == 'yes' or value == 'y' or value == 'true'
+    return value.lower() in ['1', 'yes', 'y', 'true']
 
 
 SINGLE_CONTAINER = bool_environ('SINGLE_CONTAINER')
