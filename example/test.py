@@ -39,9 +39,7 @@ BROKER_URL = (
 
 def bool_environ(key):
     value = os.environ.get(key)
-    if value is None:
-        return False
-    return value.lower() in ['1', 'yes', 'y', 'true']
+    return value is not None and value.lower() in ['1', 'yes', 'y', 'true']
 
 
 SINGLE_CONTAINER = bool_environ('SINGLE_CONTAINER')
