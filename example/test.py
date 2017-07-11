@@ -415,7 +415,7 @@ class TestCeleryWorker(object):
              '--concurrency 1'],
         ])))
 
-    def test_amqp_queues_created(self, amqp_container):
+    def test_amqp_queues_created(self, amqp_container, worker_container):
         """
         When the worker container is running, the three default Celery queues
         should have been created in RabbitMQ.
