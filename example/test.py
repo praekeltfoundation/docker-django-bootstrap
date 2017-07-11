@@ -37,6 +37,22 @@ BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
 
 
+def bool_environ(key):
+    value = os.environ.get(key)
+    if value is None:
+        return False
+
+    value = value.lower()
+    return value == '1' or value == 'yes' or value == 'y' or value == 'true'
+
+
+SINGLE_CONTAINER = bool_environ('SINGLE_CONTAINER')
+skipif_single_container_tests = pytest.mark.skipif(
+    SINGLE_CONTAINER, reason='running single-container tests')
+skipif_multi_container_tests = pytest.mark.skipif(
+    not SINGLE_CONTAINER, reason='running multi-container tests')
+
+
 @pytest.fixture(scope='module')
 def docker_helper():
     docker_helper = DockerHelper()
@@ -78,7 +94,8 @@ def amqp_container(docker_helper):
 
 
 def create_django_bootstrap_container(
-        docker_helper, name, command=None, publish_port=True):
+    docker_helper, name, command=None, single_container=False,
+        publish_port=True):
     kwargs = {
         'command': command,
         'environment': {
@@ -88,6 +105,11 @@ def create_django_bootstrap_container(
             'CELERY_BROKER_URL': BROKER_URL,
         },
     }
+    if single_container:
+        kwargs['environment'].update({
+            'CELERY_WORKER': '1',
+            'CELERY_BEAT': '1',
+        })
     if publish_port:
         kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
@@ -98,7 +120,7 @@ def create_django_bootstrap_container(
 @pytest.fixture(scope='class')
 def web_container(docker_helper, db_container, amqp_container):
     container = create_django_bootstrap_container(
-        docker_helper, 'web')
+        docker_helper, 'web', single_container=SINGLE_CONTAINER)
     docker_helper.start_container(container, r'Booting worker')
     yield container
     docker_helper.stop_and_remove_container(container)
@@ -116,6 +138,7 @@ def web_client(docker_helper, web_container):
 
 
 class TestWeb(object):
+    @skipif_single_container_tests
     def test_expected_processes(self, web_container):
         """
         When the container is running, there should be 5 running processes:
@@ -143,6 +166,43 @@ class TestWeb(object):
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+        ])))
+
+    @skipif_multi_container_tests
+    def test_expected_processes_single_container(
+            self, web_container, worker_container, beat_container):
+        """
+        When the container is running, there should be 5 running processes:
+        tini, the Nginx master and worker, and the Gunicorn master and worker.
+        """
+        ps_data = list_container_processes(web_container)
+
+        assert_that(ps_data, HasLength(7))
+
+        assert_that(ps_data.pop(0), Equals(
+            ['1', 'root',
+             'tini -- django-entrypoint.sh mysite.wsgi:application']))
+
+        # The next process we have no control over the start order or PIDs...
+        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
+        assert_that(ps_data, MatchesSetwise(*map(Equals, [
+            ['root', 'nginx: master process nginx -g daemon off;'],
+            ['nginx', 'nginx: worker process'],
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+            # No obvious way to differentiate Gunicorn master from worker
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
+             '--pidfile worker.pid --concurrency 1'],
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
+             'beat.pid'],
         ])))
 
     def test_database_tables_created(self, db_container, web_container):
@@ -379,17 +439,24 @@ class TestWeb(object):
         ))
 
 
-@pytest.fixture(scope='class')
-def worker_container(docker_helper, amqp_container):
-    container = create_django_bootstrap_container(
-        docker_helper, 'worker', command=['celery', 'worker'],
-        publish_port=False)
-    docker_helper.start_container(container, r'celery@\w+ ready')
-    yield container
-    docker_helper.stop_and_remove_container(container)
+if SINGLE_CONTAINER:
+    @pytest.fixture(scope='class')
+    def worker_container(docker_helper, web_container):
+        docker_helper.start_container(web_container, r'celery@\w+ ready')
+        return web_container
+else:
+    @pytest.fixture(scope='class')
+    def worker_container(docker_helper, amqp_container):
+        container = create_django_bootstrap_container(
+            docker_helper, 'worker', command=['celery', 'worker'],
+            publish_port=False)
+        docker_helper.start_container(container, r'celery@\w+ ready')
+        yield container
+        docker_helper.stop_and_remove_container(container)
 
 
 class TestCeleryWorker(object):
+    @skipif_single_container_tests
     def test_expected_processes(self, worker_container):
         """
         When the container is running, there should be 3 running processes:
@@ -433,17 +500,24 @@ class TestCeleryWorker(object):
         ))))
 
 
-@pytest.fixture(scope='class')
-def beat_container(docker_helper, amqp_container):
-    container = create_django_bootstrap_container(
-        docker_helper, 'beat', command=['celery', 'beat'],
-        publish_port=False)
-    docker_helper.start_container(container, r'beat: Starting\.\.\.')
-    yield container
-    docker_helper.stop_and_remove_container(container)
+if SINGLE_CONTAINER:
+    @pytest.fixture(scope='class')
+    def beat_container(docker_helper, web_container):
+        docker_helper.start_container(web_container, r'beat: Starting\.\.\.')
+        return web_container
+else:
+    @pytest.fixture(scope='class')
+    def beat_container(docker_helper, amqp_container):
+        container = create_django_bootstrap_container(
+            docker_helper, 'beat', command=['celery', 'beat'],
+            publish_port=False)
+        docker_helper.start_container(container, r'beat: Starting\.\.\.')
+        yield container
+        docker_helper.stop_and_remove_container(container)
 
 
 class TestCeleryBeat(object):
+    @skipif_single_container_tests
     def test_expected_processes(self, beat_container):
         """
         When the container is running, there should be 2 running processes:
