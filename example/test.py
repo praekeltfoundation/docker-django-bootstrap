@@ -156,15 +156,12 @@ def web_container(docker_helper, db_container, amqp_container):
 @pytest.fixture
 def web_client(docker_helper, web_container):
     port = docker_helper.get_container_host_port(web_container, '8000/tcp')
-    s = requests.Session()
+    with requests.Session() as session:
+        def client(path, method='GET', **kwargs):
+            return session.request(
+                method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
 
-    def client(path, method='GET', **kwargs):
-        return s.request(
-            method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
-
-    yield client
-
-    s.close()
+        yield client
 
 
 class TestWeb(object):
