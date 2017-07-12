@@ -65,7 +65,8 @@ def raw_db_container(docker_helper):
         POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
             'POSTGRES_USER': POSTGRES_PARAMS['user'],
             'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
-        })
+        },
+        tmpfs={'/var/lib/postgresql/data': 'uid=70,gid=70'})
     docker_helper.start_container(
         container,
         r'database system is ready to accept connections')
@@ -90,7 +91,8 @@ def raw_amqp_container(docker_helper):
         RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
             'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
             'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
-        })
+        },
+        tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
     docker_helper.start_container(container, r'Server startup complete')
     yield container
     docker_helper.stop_and_remove_container(container)
