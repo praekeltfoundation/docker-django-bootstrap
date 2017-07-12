@@ -63,7 +63,6 @@ def raw_db_container(docker_helper):
 
     container = docker_helper.create_container(
         POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
-            'POSTGRES_DB': POSTGRES_PARAMS['db'],
             'POSTGRES_USER': POSTGRES_PARAMS['user'],
             'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
         })
@@ -78,9 +77,9 @@ def raw_db_container(docker_helper):
 def db_container(docker_helper, raw_db_container):
     db = POSTGRES_PARAMS['db']
     user = POSTGRES_PARAMS['user']
-    raw_db_container.exec_run(['dropdb', db], user='postgres')
     raw_db_container.exec_run(['createdb', '-O', user, db], user='postgres')
-    return raw_db_container
+    yield raw_db_container
+    raw_db_container.exec_run(['dropdb', db], user='postgres')
 
 
 @pytest.fixture(scope='module')
@@ -89,7 +88,6 @@ def raw_amqp_container(docker_helper):
 
     container = docker_helper.create_container(
         RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
-            'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
             'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
             'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
         })
@@ -100,7 +98,14 @@ def raw_amqp_container(docker_helper):
 
 @pytest.fixture
 def amqp_container(docker_helper, raw_amqp_container):
-    return raw_amqp_container
+    vhost = RABBITMQ_PARAMS['vhost']
+    user = RABBITMQ_PARAMS['user']
+    raw_amqp_container.exec_run(['rabbitmqctl', 'add_vhost', vhost])
+    raw_amqp_container.exec_run(
+        ['rabbitmqctl', '-p', vhost, 'set_permissions', user, '.*', '.*', '.*']
+    )
+    yield raw_amqp_container
+    raw_amqp_container.exec_run(['rabbitmqctl', 'delete_vhost', vhost])
 
 
 def create_django_bootstrap_container(
