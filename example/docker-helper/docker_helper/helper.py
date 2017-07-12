@@ -61,20 +61,32 @@ class DockerHelper(object):
 
         return container
 
-    def start_container(self, container, log_line_pattern):
+    def start_container(self, container, log_line_pattern, skip=0):
         log.info("Starting container '{}'...".format(container.name))
         container.start()
-        log.debug(wait_for_log_line(container, log_line_pattern))
+        log.debug(wait_for_log_line(container, log_line_pattern, skip=skip))
         container.reload()
         log.debug("Container status: '{}'".format(container.status))
         assert container.status == 'running'
 
-    def stop_and_remove_container(
-            self, container, stop_timeout=5, remove_force=True):
+    def stop_container(self, container, stop_timeout=5):
         log.info("Stopping container '{}'...".format(container.name))
         container.stop(timeout=stop_timeout)
+
+    def restart_container(self, container, log_line_pattern, stop_timeout=5):
+        log.info("Restarting container '{}'...".format(container.name))
+        self.stop_container(container, stop_timeout=stop_timeout)
+        skip = len(container.logs().splitlines())
+        self.start_container(container, log_line_pattern, skip=skip)
+
+    def remove_container(self, container, remove_force=True):
         log.info("Removing container '{}'...".format(container.name))
         container.remove(force=remove_force)
+
+    def stop_and_remove_container(
+            self, container, stop_timeout=5, remove_force=True):
+        self.stop_container(container, stop_timeout=stop_timeout)
+        self.remove_container(container, remove_force=remove_force)
 
     def pull_image_if_not_found(self, image):
         try:

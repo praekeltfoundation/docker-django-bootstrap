@@ -35,9 +35,22 @@ def exit_after(timeout):
     return outer
 
 
-@exit_after(10)
-def wait_for_log_line(container, pattern):
+def log_lines_after(container, skip):
+    """
+    A wrapper around container.logs(stream=True) that skips some number of
+    lines before returning output.
+    """
+    skipped = 0
     for line in container.logs(stream=True):
+        if skipped < skip:
+            skipped += 1
+        else:
+            yield line
+
+
+@exit_after(10)
+def wait_for_log_line(container, pattern, skip=0):
+    for line in log_lines_after(container, skip=skip):
         line = line.decode('utf-8').rstrip()  # Drop the trailing newline
         if re.search(pattern, line):
             return line
@@ -53,9 +66,12 @@ def list_container_processes(container, columns=['pid', 'ruser', 'args']):
     # usernames in the container's namespaces. `container.top()` uses 'ps' from
     # outside the container in the host's namespaces. Note that this requires
     # the container to have a 'ps' that responds to the arguments we give it.
-    ps_output = container.exec_run(['ps', 'ax', '-o', ','.join(columns)])
+    cols = ','.join(columns)
+    ps_output = container.exec_run(['ps', 'ax', '-o', cols])
     ps_lines = output_lines(ps_output)
     ps_lines.pop(0)  # Skip the header
-    ps_lines.pop()  # Drop the entry for the ps command itself
-
-    return [line.split(None, max(0, len(columns) - 1)) for line in ps_lines]
+    ps_entries = [line.split(None, max(0, len(columns) - 1))
+                  for line in ps_lines]
+    # Drop the entry for the ps command itself
+    ps_entries = [e for e in ps_entries if e[2] != 'ps ax -o {}'.format(cols)]
+    return ps_entries

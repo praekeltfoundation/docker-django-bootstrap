@@ -58,7 +58,7 @@ def docker_helper():
 
 
 @pytest.fixture(scope='module')
-def db_container(docker_helper):
+def raw_db_container(docker_helper):
     docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
 
     container = docker_helper.create_container(
@@ -74,8 +74,17 @@ def db_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
+@pytest.fixture
+def db_container(docker_helper, raw_db_container):
+    db = POSTGRES_PARAMS['db']
+    user = POSTGRES_PARAMS['user']
+    raw_db_container.exec_run(['dropdb', db], user='postgres')
+    raw_db_container.exec_run(['createdb', '-O', user, db], user='postgres')
+    return raw_db_container
+
+
 @pytest.fixture(scope='module')
-def amqp_container(docker_helper):
+def raw_amqp_container(docker_helper):
     docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
 
     container = docker_helper.create_container(
@@ -87,6 +96,11 @@ def amqp_container(docker_helper):
     docker_helper.start_container(container, r'Server startup complete')
     yield container
     docker_helper.stop_and_remove_container(container)
+
+
+@pytest.fixture
+def amqp_container(docker_helper, raw_amqp_container):
+    return raw_amqp_container
 
 
 def create_django_bootstrap_container(
@@ -113,7 +127,24 @@ def create_django_bootstrap_container(
         name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
 
 
-@pytest.fixture(scope='class')
+# @pytest.fixture(scope='class')
+# def raw_web_container(docker_helper, db_container, amqp_container):
+#     container = create_django_bootstrap_container(
+#         docker_helper, 'web', single_container=SINGLE_CONTAINER)
+#     yield container
+#     docker_helper.remove_container(container)
+
+
+# @pytest.fixture
+# def web_container(docker_helper, raw_web_container):
+#     skip = len(raw_web_container.logs().splitlines())
+#     docker_helper.start_container(
+#         raw_web_container, r'Booting worker', skip=skip)
+#     yield raw_web_container
+#     docker_helper.stop_container(raw_web_container)
+
+
+@pytest.fixture
 def web_container(docker_helper, db_container, amqp_container):
     container = create_django_bootstrap_container(
         docker_helper, 'web', single_container=SINGLE_CONTAINER)
@@ -122,15 +153,18 @@ def web_container(docker_helper, db_container, amqp_container):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture
 def web_client(docker_helper, web_container):
     port = docker_helper.get_container_host_port(web_container, '8000/tcp')
+    s = requests.Session()
 
     def client(path, method='GET', **kwargs):
-        return requests.request(
+        return s.request(
             method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
 
-    return client
+    yield client
+
+    s.close()
 
 
 class TestWeb(object):
@@ -436,12 +470,12 @@ class TestWeb(object):
 
 
 if SINGLE_CONTAINER:
-    @pytest.fixture(scope='class')
+    @pytest.fixture
     def worker_container(docker_helper, web_container):
         docker_helper.start_container(web_container, r'celery@\w+ ready')
         return web_container
 else:
-    @pytest.fixture(scope='class')
+    @pytest.fixture
     def worker_container(docker_helper, amqp_container):
         container = create_django_bootstrap_container(
             docker_helper, 'worker', command=['celery', 'worker'],
@@ -497,12 +531,12 @@ class TestCeleryWorker(object):
 
 
 if SINGLE_CONTAINER:
-    @pytest.fixture(scope='class')
+    @pytest.fixture
     def beat_container(docker_helper, web_container):
         docker_helper.start_container(web_container, r'beat: Starting\.\.\.')
         return web_container
 else:
-    @pytest.fixture(scope='class')
+    @pytest.fixture
     def beat_container(docker_helper, amqp_container):
         container = create_django_bootstrap_container(
             docker_helper, 'beat', command=['celery', 'beat'],
