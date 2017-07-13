@@ -7,7 +7,7 @@ def resource_name(name, namespace='test'):
     return '{}_{}'.format(namespace, name)
 
 
-def _last_few_log_lines(container, max_lines=10):
+def _last_few_log_lines(container, max_lines=9999):
     logs = container.logs(tail=max_lines).decode('utf-8')
     return '\nLast few log lines:\n{}'.format(logs)
 
@@ -22,7 +22,7 @@ def wait_for_log_line(container, pattern, timeout=10):
                 line = line.decode('utf-8').rstrip()
                 if re.search(pattern, line):
                     return line
-    except TimeoutException as e:
+    except TimeoutException:
         # In Python 3 we have TimeoutError
         raise TimeoutError('Timeout waiting for log pattern {!r}.{}'.format(
             pattern, _last_few_log_lines(container)))
