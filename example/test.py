@@ -74,7 +74,7 @@ def raw_db_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture
+@pytest.fixture(scope='class')
 def db_container(docker_helper, raw_db_container):
     db = POSTGRES_PARAMS['db']
     user = POSTGRES_PARAMS['user']
@@ -98,7 +98,7 @@ def raw_amqp_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture
+@pytest.fixture(scope='class')
 def amqp_container(docker_helper, raw_amqp_container):
     vhost = RABBITMQ_PARAMS['vhost']
     user = RABBITMQ_PARAMS['user']
@@ -151,7 +151,7 @@ def create_django_bootstrap_container(
 #     docker_helper.stop_container(raw_web_container)
 
 
-@pytest.fixture
+@pytest.fixture(scope='class')
 def web_container(docker_helper, db_container, amqp_container):
     container = create_django_bootstrap_container(
         docker_helper, 'web', single_container=SINGLE_CONTAINER)
@@ -160,7 +160,7 @@ def web_container(docker_helper, db_container, amqp_container):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture
+@pytest.fixture(scope='class')
 def web_client(docker_helper, web_container):
     port = docker_helper.get_container_host_port(web_container, '8000/tcp')
     with requests.Session() as session:
@@ -474,12 +474,12 @@ class TestWeb(object):
 
 
 if SINGLE_CONTAINER:
-    @pytest.fixture
+    @pytest.fixture(scope='class')
     def worker_container(docker_helper, web_container):
         docker_helper.start_container(web_container, r'celery@\w+ ready')
         return web_container
 else:
-    @pytest.fixture
+    @pytest.fixture(scope='class')
     def worker_container(docker_helper, amqp_container):
         container = create_django_bootstrap_container(
             docker_helper, 'worker', command=['celery', 'worker'],
@@ -535,12 +535,12 @@ class TestCeleryWorker(object):
 
 
 if SINGLE_CONTAINER:
-    @pytest.fixture
+    @pytest.fixture(scope='class')
     def beat_container(docker_helper, web_container):
         docker_helper.start_container(web_container, r'beat: Starting\.\.\.')
         return web_container
 else:
-    @pytest.fixture
+    @pytest.fixture(scope='class')
     def beat_container(docker_helper, amqp_container):
         container = create_django_bootstrap_container(
             docker_helper, 'beat', command=['celery', 'beat'],
