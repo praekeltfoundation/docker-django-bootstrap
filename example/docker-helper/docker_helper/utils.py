@@ -7,7 +7,7 @@ def resource_name(name, namespace='test'):
     return '{}_{}'.format(namespace, name)
 
 
-def _last_few_log_lines(container, max_lines=9999):
+def _last_few_log_lines(container, max_lines=100):
     logs = container.logs(tail=max_lines).decode('utf-8')
     return '\nLast few log lines:\n{}'.format(logs)
 
