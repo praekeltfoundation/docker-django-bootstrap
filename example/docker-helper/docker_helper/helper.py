@@ -78,23 +78,21 @@ class DockerHelper(object):
 
         return container
 
-    def start_container(self, container):
-        log.info("Starting container '{}'...".format(container.name))
-        container.start()
-
+    def container_status(self, container):
         container.reload()
         log.debug("Container '{}' has status '{}'".format(
             container.name, container.status))
-        assert container.status == 'running'
+        return container.status
+
+    def start_container(self, container):
+        log.info("Starting container '{}'...".format(container.name))
+        container.start()
+        assert self.container_status(container) == 'running'
 
     def stop_container(self, container, timeout=5):
         log.info("Stopping container '{}'...".format(container.name))
         container.stop(timeout=timeout)
-
-        container.reload()
-        log.debug("Container '{}' has status '{}'".format(
-            container.name, container.status))
-        assert container.status != 'running'
+        assert self.container_status(container) != 'running'
 
     def remove_container(self, container, force=True):
         log.info("Removing container '{}'...".format(container.name))
