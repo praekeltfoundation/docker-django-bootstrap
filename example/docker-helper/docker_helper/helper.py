@@ -52,8 +52,12 @@ class DockerHelper(object):
             **kwargs)
 
         # FIXME: Hack to make sure the container has the right network aliases.
+        # Only the low-level Docker client API allows us to specify endpoint
+        # aliases at container creation time:
+        # https://docker-py.readthedocs.io/en/stable/api.html#docker.api.container.ContainerApiMixin.create_container
         # If we don't specify a network when the container is created then the
-        # default bridge network is attached which we don't want.
+        # default bridge network is attached which we don't want, so we
+        # reattach our custom network as that allows specifying aliases.
         self._network.disconnect(container)
         self._network.connect(container, aliases=[name])
 
