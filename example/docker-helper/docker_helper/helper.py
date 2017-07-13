@@ -19,21 +19,23 @@ class DockerHelper(object):
         self._client = docker.client.from_env()
         self._network = self._client.networks.create(
             resource_name('default'), driver='bridge')
-        self._container_ids = []
+        self._container_ids = set()
 
     def teardown(self):
         # Remove all containers
-        for container_id in self._container_ids:
+        for container_id in self._container_ids.copy():
             # Check if the container exists before trying to remove it
             try:
                 container = self._client.containers.get(container_id)
             except docker.errors.NotFound:
                 continue
 
-            print("Warning container '{}' was still running".format(
+            log.warn("Container '{}' still existed during teardown".format(
                 container.name))
 
-            self.stop_and_remove_container(container)
+            if container.status == 'running':
+                self.stop_container(container)
+            self.remove_container(container)
 
         # Remove the network
         self._network.remove()
@@ -57,7 +59,7 @@ class DockerHelper(object):
 
         # Keep a reference to created containers to make sure they are cleaned
         # up
-        self._container_ids.append(container.id)
+        self._container_ids.add(container.id)
 
         return container
 
@@ -82,6 +84,8 @@ class DockerHelper(object):
     def remove_container(self, container, force=True):
         log.info("Removing container '{}'...".format(container.name))
         container.remove(force=force)
+
+        self._container_ids.remove(container.id)
 
     def stop_and_remove_container(
             self, container, stop_timeout=5, remove_force=True):
