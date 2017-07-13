@@ -3,7 +3,7 @@ import warnings
 
 import docker
 
-from .utils import resource_name, wait_for_log_line
+from .utils import resource_name
 
 log = logging.getLogger(__name__)
 
@@ -61,20 +61,32 @@ class DockerHelper(object):
 
         return container
 
-    def start_container(self, container, log_line_pattern):
+    def start_container(self, container):
         log.info("Starting container '{}'...".format(container.name))
         container.start()
-        log.debug(wait_for_log_line(container, log_line_pattern))
+
         container.reload()
-        log.debug("Container status: '{}'".format(container.status))
+        log.debug("Container '{}' has status '{}'".format(
+            container.name, container.status))
         assert container.status == 'running'
+
+    def stop_container(self, container, timeout=5):
+        log.info("Stopping container '{}'...".format(container.name))
+        container.stop(timeout=timeout)
+
+        container.reload()
+        log.debug("Container '{}' has status '{}'".format(
+            container.name, container.status))
+        assert container.status != 'running'
+
+    def remove_container(self, container, force=True):
+        log.info("Removing container '{}'...".format(container.name))
+        container.remove(force=force)
 
     def stop_and_remove_container(
             self, container, stop_timeout=5, remove_force=True):
-        log.info("Stopping container '{}'...".format(container.name))
-        container.stop(timeout=stop_timeout)
-        log.info("Removing container '{}'...".format(container.name))
-        container.remove(force=remove_force)
+        self.stop_container(container, timeout=stop_timeout)
+        self.remove_container(container, force=remove_force)
 
     def pull_image_if_not_found(self, image):
         try:
