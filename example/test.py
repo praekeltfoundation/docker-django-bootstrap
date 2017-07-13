@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import json
+import logging
 import os
 import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -16,6 +18,9 @@ from testtools.matchers import (
 
 from docker_helper import (
     DockerHelper, list_container_processes, output_lines, wait_for_log_line)
+
+logging.basicConfig(stream=sys.stderr)
+logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
 POSTGRES_PARAMS = {
