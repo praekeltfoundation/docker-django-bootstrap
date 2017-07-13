@@ -17,9 +17,20 @@ class DockerHelper(object):
             action='ignore', message='unclosed', category=ResourceWarning)
 
         self._client = docker.client.from_env()
-        self._network = self._client.networks.create(
-            resource_name('default'), driver='bridge')
         self._container_ids = set()
+
+        self._setup_network()
+
+    def _setup_network(self):
+        # Docker allows the creation of multiple networks with the same name
+        # (unlike containers). This seems to cause problems sometimes with
+        # container networking for some reason (?).
+        name = resource_name('default')
+        if self._client.networks.list(names=[name]):
+            raise RuntimeError(
+                "A network with the name '{}' already exists".format(name))
+
+        self._network = self._client.networks.create(name, driver='bridge')
 
     def teardown(self):
         # Remove all containers
