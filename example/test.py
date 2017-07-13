@@ -484,7 +484,7 @@ class TestWeb(object):
 if SINGLE_CONTAINER:
     @pytest.fixture(scope='class')
     def worker_container(docker_helper, web_container):
-        wait_for_log_line(container, r'celery@\w+ ready')
+        wait_for_log_line(web_container, r'celery@\w+ ready')
         return web_container
 else:
     @pytest.fixture(scope='class')
@@ -546,7 +546,7 @@ class TestCeleryWorker(object):
 if SINGLE_CONTAINER:
     @pytest.fixture(scope='class')
     def beat_container(docker_helper, web_container):
-        wait_for_log_line(container, r'beat: Starting\.\.\.')
+        wait_for_log_line(web_container, r'beat: Starting\.\.\.')
         return web_container
 else:
     @pytest.fixture(scope='class')
