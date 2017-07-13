@@ -8,5 +8,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         'docker >= 2.4.0',
+        'stopit >= 1.0.0',
     ],
 )

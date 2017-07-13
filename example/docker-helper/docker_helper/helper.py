@@ -3,7 +3,7 @@ import warnings
 
 import docker
 
-from .utils import resource_name, wait_for_log_line
+from .utils import resource_name
 
 log = logging.getLogger(__name__)
 
@@ -17,23 +17,36 @@ class DockerHelper(object):
             action='ignore', message='unclosed', category=ResourceWarning)
 
         self._client = docker.client.from_env()
-        self._network = self._client.networks.create(
-            resource_name('default'), driver='bridge')
-        self._container_ids = []
+        self._container_ids = set()
+
+        self._setup_network()
+
+    def _setup_network(self):
+        # Docker allows the creation of multiple networks with the same name
+        # (unlike containers). This seems to cause problems sometimes with
+        # container networking for some reason (?).
+        name = resource_name('default')
+        if self._client.networks.list(names=[name]):
+            raise RuntimeError(
+                "A network with the name '{}' already exists".format(name))
+
+        self._network = self._client.networks.create(name, driver='bridge')
 
     def teardown(self):
         # Remove all containers
-        for container_id in self._container_ids:
+        for container_id in self._container_ids.copy():
             # Check if the container exists before trying to remove it
             try:
                 container = self._client.containers.get(container_id)
             except docker.errors.NotFound:
                 continue
 
-            print("Warning container '{}' was still running".format(
+            log.warn("Container '{}' still existed during teardown".format(
                 container.name))
 
-            self.stop_and_remove_container(container)
+            if container.status == 'running':
+                self.stop_container(container)
+            self.remove_container(container)
 
         # Remove the network
         self._network.remove()
@@ -50,31 +63,47 @@ class DockerHelper(object):
             **kwargs)
 
         # FIXME: Hack to make sure the container has the right network aliases.
+        # Only the low-level Docker client API allows us to specify endpoint
+        # aliases at container creation time:
+        # https://docker-py.readthedocs.io/en/stable/api.html#docker.api.container.ContainerApiMixin.create_container
         # If we don't specify a network when the container is created then the
-        # default bridge network is attached which we don't want.
+        # default bridge network is attached which we don't want, so we
+        # reattach our custom network as that allows specifying aliases.
         self._network.disconnect(container)
         self._network.connect(container, aliases=[name])
 
         # Keep a reference to created containers to make sure they are cleaned
         # up
-        self._container_ids.append(container.id)
+        self._container_ids.add(container.id)
 
         return container
 
-    def start_container(self, container, log_line_pattern):
+    def container_status(self, container):
+        container.reload()
+        log.debug("Container '{}' has status '{}'".format(
+            container.name, container.status))
+        return container.status
+
+    def start_container(self, container):
         log.info("Starting container '{}'...".format(container.name))
         container.start()
-        log.debug(wait_for_log_line(container, log_line_pattern))
-        container.reload()
-        log.debug("Container status: '{}'".format(container.status))
-        assert container.status == 'running'
+        assert self.container_status(container) == 'running'
+
+    def stop_container(self, container, timeout=5):
+        log.info("Stopping container '{}'...".format(container.name))
+        container.stop(timeout=timeout)
+        assert self.container_status(container) != 'running'
+
+    def remove_container(self, container, force=True):
+        log.info("Removing container '{}'...".format(container.name))
+        container.remove(force=force)
+
+        self._container_ids.remove(container.id)
 
     def stop_and_remove_container(
             self, container, stop_timeout=5, remove_force=True):
-        log.info("Stopping container '{}'...".format(container.name))
-        container.stop(timeout=stop_timeout)
-        log.info("Removing container '{}'...".format(container.name))
-        container.remove(force=remove_force)
+        self.stop_container(container, timeout=stop_timeout)
+        self.remove_container(container, force=remove_force)
 
     def pull_image_if_not_found(self, image):
         try:
