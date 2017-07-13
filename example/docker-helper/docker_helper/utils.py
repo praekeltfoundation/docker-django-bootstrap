@@ -1,41 +1,18 @@
-import _thread as thread
 import re
-import sys
-import threading
+
+from stopit import SignalTimeout, TimeoutException
 
 
 def resource_name(name, namespace='test'):
     return '{}_{}'.format(namespace, name)
 
 
-def _quit_function(fn_name):
-    # https://stackoverflow.com/a/31667005
-    print('{} took too long'.format(fn_name), file=sys.stderr)
-    sys.stderr.flush()  # Python 3 stderr is likely buffered.
-    # FIXME: Interrupting the main thread is hacky
-    thread.interrupt_main()  # raises KeyboardInterrupt
+def _last_few_log_lines(container, max_lines=100):
+    logs = container.logs(tail=max_lines).decode('utf-8')
+    return '\nLast few log lines:\n{}'.format(logs)
 
 
-def exit_after(timeout):
-    """
-    Use as decorator to exit process if function takes longer than s seconds
-    https://stackoverflow.com/a/31667005
-    """
-    def outer(fn):
-        def inner(*args, **kwargs):
-            timer = threading.Timer(
-                timeout, _quit_function, args=[fn.__name__])
-            timer.start()
-            try:
-                result = fn(*args, **kwargs)
-            finally:
-                timer.cancel()
-            return result
-        return inner
-    return outer
-
-
-def log_lines_after(container, skip):
+def _log_lines_after(container, skip):
     """
     A wrapper around container.logs(stream=True) that skips some number of
     lines before returning output.
@@ -48,12 +25,23 @@ def log_lines_after(container, skip):
             yield line
 
 
-@exit_after(10)
-def wait_for_log_line(container, pattern, skip=0):
-    for line in log_lines_after(container, skip=skip):
-        line = line.decode('utf-8').rstrip()  # Drop the trailing newline
-        if re.search(pattern, line):
-            return line
+def wait_for_log_line(container, pattern, timeout=10, skip=0):
+    try:
+        # stopit.ThreadingTimeout doesn't seem to work but a Unix-only
+        # solution should be fine for now :-/
+        with SignalTimeout(timeout):
+            for line in _log_lines_after(container, skip):
+                # Drop the trailing newline
+                line = line.decode('utf-8').rstrip()
+                if re.search(pattern, line):
+                    return line
+    except TimeoutException:
+        # In Python 3 we have TimeoutError
+        raise TimeoutError('Timeout waiting for log pattern {!r}.{}'.format(
+            pattern, _last_few_log_lines(container)))
+
+    raise RuntimeError('Log pattern {!r} not found in logs.{}'.format(
+        pattern, _last_few_log_lines(container)))
 
 
 def output_lines(raw_output, encoding='utf-8'):

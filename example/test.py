@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 import json
+import logging
 import os
 import re
+import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -14,7 +16,11 @@ from testtools.matchers import (
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
-from docker_helper import DockerHelper, list_container_processes, output_lines
+from docker_helper import (
+    DockerHelper, list_container_processes, output_lines, wait_for_log_line)
+
+logging.basicConfig(stream=sys.stderr)
+logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
 POSTGRES_PARAMS = {
@@ -67,9 +73,9 @@ def raw_db_container(docker_helper):
             'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
         },
         tmpfs={'/var/lib/postgresql/data': 'uid=70,gid=70'})
-    docker_helper.start_container(
-        container,
-        r'database system is ready to accept connections')
+    docker_helper.start_container(container)
+    wait_for_log_line(
+        container, r'database system is ready to accept connections')
     yield container
     docker_helper.stop_and_remove_container(container)
 
@@ -93,7 +99,8 @@ def raw_amqp_container(docker_helper):
             'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
         },
         tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
-    docker_helper.start_container(container, r'Server startup complete')
+    docker_helper.start_container(container)
+    wait_for_log_line(container, r'Server startup complete')
     yield container
     docker_helper.stop_and_remove_container(container)
 
@@ -155,7 +162,8 @@ def create_django_bootstrap_container(
 def web_container(docker_helper, db_container, amqp_container):
     container = create_django_bootstrap_container(
         docker_helper, 'web', single_container=SINGLE_CONTAINER)
-    docker_helper.start_container(container, r'Booting worker')
+    docker_helper.start_container(container)
+    wait_for_log_line(container, r'Booting worker')
     yield container
     docker_helper.stop_and_remove_container(container)
 
@@ -476,7 +484,7 @@ class TestWeb(object):
 if SINGLE_CONTAINER:
     @pytest.fixture(scope='class')
     def worker_container(docker_helper, web_container):
-        docker_helper.start_container(web_container, r'celery@\w+ ready')
+        wait_for_log_line(container, r'celery@\w+ ready')
         return web_container
 else:
     @pytest.fixture(scope='class')
@@ -484,7 +492,8 @@ else:
         container = create_django_bootstrap_container(
             docker_helper, 'worker', command=['celery', 'worker'],
             publish_port=False)
-        docker_helper.start_container(container, r'celery@\w+ ready')
+        docker_helper.start_container(container)
+        wait_for_log_line(container, r'celery@\w+ ready')
         yield container
         docker_helper.stop_and_remove_container(container)
 
@@ -537,7 +546,7 @@ class TestCeleryWorker(object):
 if SINGLE_CONTAINER:
     @pytest.fixture(scope='class')
     def beat_container(docker_helper, web_container):
-        docker_helper.start_container(web_container, r'beat: Starting\.\.\.')
+        wait_for_log_line(container, r'beat: Starting\.\.\.')
         return web_container
 else:
     @pytest.fixture(scope='class')
@@ -545,7 +554,8 @@ else:
         container = create_django_bootstrap_container(
             docker_helper, 'beat', command=['celery', 'beat'],
             publish_port=False)
-        docker_helper.start_container(container, r'beat: Starting\.\.\.')
+        docker_helper.start_container(container)
+        wait_for_log_line(container, r'beat: Starting\.\.\.')
         yield container
         docker_helper.stop_and_remove_container(container)
 
