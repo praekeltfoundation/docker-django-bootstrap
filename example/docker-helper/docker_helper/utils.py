@@ -13,7 +13,6 @@ def _last_few_log_lines(container, max_lines=10):
 
 
 def wait_for_log_line(container, pattern, timeout=10):
-    matched_line = None
     try:
         # stopit.ThreadingTimeout doesn't seem to work but a Unix-only
         # solution should be fine for now :-/
@@ -22,18 +21,14 @@ def wait_for_log_line(container, pattern, timeout=10):
                 # Drop the trailing newline
                 line = line.decode('utf-8').rstrip()
                 if re.search(pattern, line):
-                    matched_line = line
-                    break
+                    return line
     except TimeoutException as e:
         # In Python 3 we have TimeoutError
         raise TimeoutError('Timeout waiting for log pattern {!r}.{}'.format(
             pattern, _last_few_log_lines(container)))
 
-    if matched_line is None:
-        raise RuntimeError('Log pattern {!r} not found in logs.{}'.format(
-            pattern, _last_few_log_lines(container)))
-
-    return matched_line
+    raise RuntimeError('Log pattern {!r} not found in logs.{}'.format(
+        pattern, _last_few_log_lines(container)))
 
 
 def output_lines(raw_output, encoding='utf-8'):
