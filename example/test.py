@@ -65,7 +65,7 @@ def rc_helper():
         def __init__(self):
             self.executor = futures.ThreadPoolExecutor()
 
-        def run_concurrent(self, runnables):
+        def run_concurrent(self, *runnables):
             fs = []
             for r in runnables:
                 r = r if isinstance(r, Runnable) else Runnable(*r)
@@ -93,7 +93,7 @@ def db_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
-def clear_db(db_container):
+def clean_db(db_container):
     db = POSTGRES_PARAMS['db']
     user = POSTGRES_PARAMS['user']
     db_container.exec_run(['dropdb', db], user='postgres')
@@ -117,13 +117,13 @@ def amqp_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
-def reset_amqp(amqp_container):
+def clean_amqp(amqp_container):
     reset_erl = 'rabbit:stop(), rabbit_mnesia:reset(), rabbit:start().'
     amqp_container.exec_run(['rabbitmqctl', 'eval', reset_erl])
 
 
 def create_django_bootstrap_container(
-    docker_helper, name, command=None, single_container=False,
+        docker_helper, name, command=None, single_container=False,
         publish_port=True):
     kwargs = {
         'command': command,
@@ -146,16 +146,25 @@ def create_django_bootstrap_container(
         name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
 
 
+def state_cleanup_items(keywords, amqp_container=None, db_container=None):
+    cleanups = []
+    if 'skip_state_cleanup' not in keywords:
+        if db_container is not None and 'skip_db_cleanup' not in keywords:
+            cleanups.append([clean_db, db_container])
+        if amqp_container is not None and 'skip_amqp_cleanup' not in keywords:
+            cleanups.append([clean_amqp, amqp_container])
+    return cleanups
+
+
 @pytest.fixture
-def single_container(docker_helper, rc_helper, db_container, amqp_container):
-    results = rc_helper.run_concurrent([
-        (clear_db, db_container),
-        (reset_amqp, amqp_container),
+def single_container(
+        request, docker_helper, rc_helper, db_container, amqp_container):
+    results = rc_helper.run_concurrent(
         Runnable(
             create_django_bootstrap_container, docker_helper, 'web',
             single_container=True),
-    ])
-    container = results[-1]
+        *state_cleanup_items(request.keywords, amqp_container, db_container))
+    container = results[0]
     docker_helper.start_container(container)
     wait_for_log_line(container, r'Booting worker')
     wait_for_log_line(container, r'celery@\w+ ready')
@@ -165,13 +174,12 @@ def single_container(docker_helper, rc_helper, db_container, amqp_container):
 
 
 @pytest.fixture
-def web_only_container(docker_helper, rc_helper, db_container, amqp_container):
-    results = rc_helper.run_concurrent([
-        (clear_db, db_container),
-        (reset_amqp, amqp_container),
+def web_only_container(
+        request, docker_helper, rc_helper, db_container, amqp_container):
+    results = rc_helper.run_concurrent(
         (create_django_bootstrap_container, docker_helper, 'web'),
-    ])
-    container = results[-1]
+        *state_cleanup_items(request.keywords, amqp_container, db_container))
+    container = results[0]
     docker_helper.start_container(container)
     wait_for_log_line(container, r'Booting worker')
     yield container
@@ -184,14 +192,13 @@ def web_container(request):
 
 
 @pytest.fixture
-def worker_only_container(rc_helper, docker_helper, amqp_container):
-    results = rc_helper.run_concurrent([
-        (reset_amqp, amqp_container),
+def worker_only_container(request, rc_helper, docker_helper, amqp_container):
+    results = rc_helper.run_concurrent(
         Runnable(
             create_django_bootstrap_container, docker_helper, 'worker',
             command=['celery', 'worker'], publish_port=False),
-    ])
-    container = results[-1]
+        *state_cleanup_items(request.keywords, amqp_container))
+    container = results[0]
     docker_helper.start_container(container)
     wait_for_log_line(container, r'celery@\w+ ready')
     yield container
@@ -204,13 +211,12 @@ def worker_container(request):
 
 
 @pytest.fixture
-def beat_only_container(rc_helper, docker_helper, amqp_container):
-    results = rc_helper.run_concurrent([
-        (reset_amqp, amqp_container),
+def beat_only_container(request, rc_helper, docker_helper, amqp_container):
+    results = rc_helper.run_concurrent(
         Runnable(
             create_django_bootstrap_container, docker_helper, 'beat',
             command=['celery', 'beat'], publish_port=False),
-    ])
+        *state_cleanup_items(request.keywords, amqp_container))
     container = results[-1]
     docker_helper.start_container(container)
     wait_for_log_line(container, r'beat: Starting\.\.\.')
@@ -235,6 +241,7 @@ def web_client(docker_helper, web_container):
 
 
 class TestWeb(object):
+    @pytest.mark.skip_state_cleanup
     def test_expected_processes(self, web_only_container):
         """
         When the container is running, there should be 5 running processes:
@@ -264,6 +271,7 @@ class TestWeb(object):
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
         ])))
 
+    @pytest.mark.skip_state_cleanup
     def test_expected_processes_single_container(self, single_container):
         """
         When the container is running, there should be 5 running processes:
@@ -299,6 +307,7 @@ class TestWeb(object):
              'beat.pid'],
         ])))
 
+    @pytest.mark.skip_amqp_cleanup
     def test_database_tables_created(self, db_container, web_container):
         """
         When the web container is running, a migration should have completed
@@ -313,6 +322,7 @@ class TestWeb(object):
         count = int(psql_output.strip())
         assert_that(count, GreaterThan(0))
 
+    @pytest.mark.skip_state_cleanup
     def test_admin_site_live(self, web_client):
         """
         When we get the /admin/ path, we should receive some HTML for the
@@ -325,6 +335,7 @@ class TestWeb(object):
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
 
+    @pytest.mark.skip_state_cleanup
     def test_nginx_access_logs(self, web_container, web_client):
         """
         When a request has been made to the container, Nginx logs access logs
@@ -378,6 +389,7 @@ class TestWeb(object):
             'http_x_forwarded_for': Equals(''),
         }))
 
+    @pytest.mark.skip_state_cleanup
     def test_static_file(self, web_client):
         """
         When a static file is requested, Nginx should serve the file with the
@@ -388,6 +400,7 @@ class TestWeb(object):
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.text, Contains('DJANGO Admin styles'))
 
+    @pytest.mark.skip_state_cleanup
     def test_manifest_static_storage_file(self, web_container, web_client):
         """
         When a static file that was processed by Django's
@@ -405,6 +418,7 @@ class TestWeb(object):
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
+    @pytest.mark.skip_state_cleanup
     def test_django_compressor_js_file(self, web_container, web_client):
         """
         When a static JavaScript file that was processed by django_compressor
@@ -422,6 +436,7 @@ class TestWeb(object):
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
+    @pytest.mark.skip_state_cleanup
     def test_django_compressor_css_file(self, web_container, web_client):
         """
         When a static CSS file that was processed by django_compressor is
@@ -438,6 +453,7 @@ class TestWeb(object):
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
+    @pytest.mark.skip_state_cleanup
     def test_gzip_css_compressed(self, web_container, web_client):
         """
         When a CSS file larger than 1024 bytes is requested and the
@@ -455,6 +471,7 @@ class TestWeb(object):
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
+    @pytest.mark.skip_state_cleanup
     def test_gzip_woff_not_compressed(self, web_container, web_client):
         """
         When a .woff file larger than 1024 bytes is requested and the
@@ -475,6 +492,7 @@ class TestWeb(object):
             Not(Contains('Vary')),
         ))
 
+    @pytest.mark.skip_state_cleanup
     def test_gzip_accept_encoding_respected(self, web_container, web_client):
         """
         When a CSS file larger than 1024 bytes is requested and the
@@ -495,6 +513,7 @@ class TestWeb(object):
         # file will be served with a different encoding.
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
+    @pytest.mark.skip_state_cleanup
     def test_gzip_via_compressed(self, web_container, web_client):
         """
         When a CSS file larger than 1024 bytes is requested and the
@@ -513,6 +532,7 @@ class TestWeb(object):
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
+    @pytest.mark.skip_state_cleanup
     def test_gzip_small_file_not_compressed(self, web_container, web_client):
         """
         When a CSS file smaller than 1024 bytes is requested and the
@@ -534,6 +554,7 @@ class TestWeb(object):
 
 
 class TestCeleryWorker(object):
+    @pytest.mark.skip_state_cleanup
     def test_expected_processes(self, worker_only_container):
         """
         When the container is running, there should be 3 running processes:
@@ -578,6 +599,7 @@ class TestCeleryWorker(object):
 
 
 class TestCeleryBeat(object):
+    @pytest.mark.skip_state_cleanup
     def test_expected_processes(self, beat_only_container):
         """
         When the container is running, there should be 2 running processes:
