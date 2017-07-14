@@ -44,18 +44,6 @@ BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
 
 
-def bool_environ(key):
-    value = os.environ.get(key)
-    return value is not None and value.lower() in ['1', 'yes', 'y', 'true']
-
-
-SINGLE_CONTAINER = bool_environ('SINGLE_CONTAINER')
-skipif_single_container_tests = pytest.mark.skipif(
-    SINGLE_CONTAINER, reason='running single-container tests')
-skipif_multi_container_tests = pytest.mark.skipif(
-    not SINGLE_CONTAINER, reason='running multi-container tests')
-
-
 @pytest.fixture(scope='module')
 def docker_helper():
     docker_helper = DockerHelper()
@@ -158,32 +146,30 @@ def create_django_bootstrap_container(
         name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
 
 
-# @pytest.fixture(scope='module')
-# def raw_web_container(docker_helper, raw_db_container, raw_amqp_container):
-#     container = create_django_bootstrap_container(
-#         docker_helper, 'web', single_container=SINGLE_CONTAINER)
-#     yield container
-#     docker_helper.remove_container(container)
-
-
-# @pytest.fixture(scope='function')
-# def web_container(docker_helper, db_container, amqp_container,
-#                   raw_web_container):
-#     skip = len(raw_web_container.logs().splitlines())
-#     docker_helper.start_container(
-#         raw_web_container, r'Booting worker', skip=skip)
-#     yield raw_web_container
-#     docker_helper.stop_container(raw_web_container)
-
-
-@pytest.fixture(scope='function')
-def web_container(docker_helper, rc_helper, db_container, amqp_container):
+@pytest.fixture
+def single_container(docker_helper, rc_helper, db_container, amqp_container):
     results = rc_helper.run_concurrent([
         (clear_db, db_container),
         (reset_amqp, amqp_container),
         Runnable(
             create_django_bootstrap_container, docker_helper, 'web',
-            single_container=SINGLE_CONTAINER),
+            single_container=True),
+    ])
+    container = results[-1]
+    docker_helper.start_container(container)
+    wait_for_log_line(container, r'Booting worker')
+    wait_for_log_line(container, r'celery@\w+ ready')
+    wait_for_log_line(container, r'beat: Starting\.\.\.')
+    yield container
+    docker_helper.stop_and_remove_container(container)
+
+
+@pytest.fixture
+def web_only_container(docker_helper, rc_helper, db_container, amqp_container):
+    results = rc_helper.run_concurrent([
+        (clear_db, db_container),
+        (reset_amqp, amqp_container),
+        (create_django_bootstrap_container, docker_helper, 'web'),
     ])
     container = results[-1]
     docker_helper.start_container(container)
@@ -192,7 +178,52 @@ def web_container(docker_helper, rc_helper, db_container, amqp_container):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture(params=['single_container', 'web_only_container'])
+def web_container(request):
+    yield request.getfixturevalue(request.param)
+
+
+@pytest.fixture
+def worker_only_container(rc_helper, docker_helper, amqp_container):
+    results = rc_helper.run_concurrent([
+        (reset_amqp, amqp_container),
+        Runnable(
+            create_django_bootstrap_container, docker_helper, 'worker',
+            command=['celery', 'worker'], publish_port=False),
+    ])
+    container = results[-1]
+    docker_helper.start_container(container)
+    wait_for_log_line(container, r'celery@\w+ ready')
+    yield container
+    docker_helper.stop_and_remove_container(container)
+
+
+@pytest.fixture(params=['single_container', 'worker_only_container'])
+def worker_container(request):
+    yield request.getfixturevalue(request.param)
+
+
+@pytest.fixture
+def beat_only_container(rc_helper, docker_helper, amqp_container):
+    results = rc_helper.run_concurrent([
+        (reset_amqp, amqp_container),
+        Runnable(
+            create_django_bootstrap_container, docker_helper, 'beat',
+            command=['celery', 'beat'], publish_port=False),
+    ])
+    container = results[-1]
+    docker_helper.start_container(container)
+    wait_for_log_line(container, r'beat: Starting\.\.\.')
+    yield container
+    docker_helper.stop_and_remove_container(container)
+
+
+@pytest.fixture(params=['single_container', 'beat_only_container'])
+def beat_container(request):
+    yield request.getfixturevalue(request.param)
+
+
+@pytest.fixture
 def web_client(docker_helper, web_container):
     port = docker_helper.get_container_host_port(web_container, '8000/tcp')
     with requests.Session() as session:
@@ -204,13 +235,12 @@ def web_client(docker_helper, web_container):
 
 
 class TestWeb(object):
-    @skipif_single_container_tests
-    def test_expected_processes(self, web_container):
+    def test_expected_processes(self, web_only_container):
         """
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_data = list_container_processes(web_container)
+        ps_data = list_container_processes(web_only_container)
 
         assert_that(ps_data, HasLength(5))
 
@@ -234,14 +264,12 @@ class TestWeb(object):
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
         ])))
 
-    @skipif_multi_container_tests
-    def test_expected_processes_single_container(
-            self, web_container, worker_container, beat_container):
+    def test_expected_processes_single_container(self, single_container):
         """
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_data = list_container_processes(web_container)
+        ps_data = list_container_processes(single_container)
 
         assert_that(ps_data, HasLength(7))
 
@@ -505,32 +533,13 @@ class TestWeb(object):
         ))
 
 
-if SINGLE_CONTAINER:
-    @pytest.fixture(scope='function')
-    def worker_container(docker_helper, web_container):
-        wait_for_log_line(web_container, r'celery@\w+ ready')
-        return web_container
-else:
-    @pytest.fixture(scope='function')
-    def worker_container(docker_helper, amqp_container):
-        container = create_django_bootstrap_container(
-            docker_helper, 'worker', command=['celery', 'worker'],
-            publish_port=False)
-        reset_amqp(amqp_container)
-        docker_helper.start_container(container)
-        wait_for_log_line(container, r'celery@\w+ ready')
-        yield container
-        docker_helper.stop_and_remove_container(container)
-
-
 class TestCeleryWorker(object):
-    @skipif_single_container_tests
-    def test_expected_processes(self, worker_container):
+    def test_expected_processes(self, worker_only_container):
         """
         When the container is running, there should be 3 running processes:
         tini, and the Celery worker master and worker.
         """
-        ps_data = list_container_processes(worker_container)
+        ps_data = list_container_processes(worker_only_container)
 
         assert_that(ps_data, HasLength(3))
 
@@ -568,32 +577,13 @@ class TestCeleryWorker(object):
         ))))
 
 
-if SINGLE_CONTAINER:
-    @pytest.fixture(scope='function')
-    def beat_container(docker_helper, web_container):
-        wait_for_log_line(web_container, r'beat: Starting\.\.\.')
-        return web_container
-else:
-    @pytest.fixture(scope='function')
-    def beat_container(docker_helper, amqp_container):
-        container = create_django_bootstrap_container(
-            docker_helper, 'beat', command=['celery', 'beat'],
-            publish_port=False)
-        reset_amqp(amqp_container)
-        docker_helper.start_container(container)
-        wait_for_log_line(container, r'beat: Starting\.\.\.')
-        yield container
-        docker_helper.stop_and_remove_container(container)
-
-
 class TestCeleryBeat(object):
-    @skipif_single_container_tests
-    def test_expected_processes(self, beat_container):
+    def test_expected_processes(self, beat_only_container):
         """
         When the container is running, there should be 2 running processes:
         tini, and the Celery beat process.
         """
-        ps_data = list_container_processes(beat_container)
+        ps_data = list_container_processes(beat_only_container)
 
         assert_that(ps_data, HasLength(2))
         assert_that(ps_data[0], Equals(
