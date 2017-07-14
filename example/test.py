@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import logging
-import os
 import re
 import sys
 import time
@@ -37,7 +36,6 @@ RABBITMQ_PARAMS = {
     'user': 'mysite',
     'password': 'secret',
 }
-DJANGO_BOOTSTRAP_IMAGE = os.environ.get('DJANGO_BOOTSTRAP_IMAGE', 'mysite:py3')
 DATABASE_URL = (
     'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
 BROKER_URL = (
@@ -123,7 +121,7 @@ def clean_amqp(amqp_container):
 
 
 def create_django_bootstrap_container(
-        docker_helper, name, command=None, single_container=False,
+        request, docker_helper, name, command=None, single_container=False,
         publish_port=True):
     kwargs = {
         'command': command,
@@ -142,8 +140,8 @@ def create_django_bootstrap_container(
     if publish_port:
         kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-    return docker_helper.create_container(
-        name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
+    image = request.config.getoption('--django-bootstrap-image')
+    return docker_helper.create_container(name, image, **kwargs)
 
 
 def state_cleanup_items(keywords, amqp_container=None, db_container=None):
@@ -161,7 +159,7 @@ def single_container(
         request, docker_helper, rc_helper, db_container, amqp_container):
     results = rc_helper.run_concurrent(
         Runnable(
-            create_django_bootstrap_container, docker_helper, 'web',
+            create_django_bootstrap_container, request, docker_helper, 'web',
             single_container=True),
         *state_cleanup_items(request.keywords, amqp_container, db_container))
     container = results[0]
@@ -177,7 +175,7 @@ def single_container(
 def web_only_container(
         request, docker_helper, rc_helper, db_container, amqp_container):
     results = rc_helper.run_concurrent(
-        (create_django_bootstrap_container, docker_helper, 'web'),
+        (create_django_bootstrap_container, request, docker_helper, 'web'),
         *state_cleanup_items(request.keywords, amqp_container, db_container))
     container = results[0]
     docker_helper.start_container(container)
@@ -195,7 +193,7 @@ def web_container(request):
 def worker_only_container(request, rc_helper, docker_helper, amqp_container):
     results = rc_helper.run_concurrent(
         Runnable(
-            create_django_bootstrap_container, docker_helper, 'worker',
+            create_django_bootstrap_container, request, docker_helper, 'worker',
             command=['celery', 'worker'], publish_port=False),
         *state_cleanup_items(request.keywords, amqp_container))
     container = results[0]
@@ -214,7 +212,7 @@ def worker_container(request):
 def beat_only_container(request, rc_helper, docker_helper, amqp_container):
     results = rc_helper.run_concurrent(
         Runnable(
-            create_django_bootstrap_container, docker_helper, 'beat',
+            create_django_bootstrap_container, request, docker_helper, 'beat',
             command=['celery', 'beat'], publish_port=False),
         *state_cleanup_items(request.keywords, amqp_container))
     container = results[-1]
