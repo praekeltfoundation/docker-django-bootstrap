@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+from concurrent import futures
 from datetime import datetime, timedelta, timezone
 
 import iso8601
@@ -63,8 +64,32 @@ def docker_helper():
     docker_helper.teardown()
 
 
+class Runnable:
+    def __init__(self, f, *args, **kw):
+        self.f = f
+        self.args = args
+        self.kw = kw
+
+
 @pytest.fixture(scope='module')
-def raw_db_container(docker_helper):
+def rc_helper():
+    class RCH:
+        def __init__(self):
+            self.executor = futures.ThreadPoolExecutor()
+
+        def run_concurrent(self, runnables):
+            fs = []
+            for r in runnables:
+                r = r if isinstance(r, Runnable) else Runnable(*r)
+                fs.append(self.executor.submit(r.f, *r.args, **r.kw))
+            return [f.result() for f in fs]
+    rch = RCH()
+    yield rch
+    rch.executor.shutdown()
+
+
+@pytest.fixture(scope='module')
+def db_container(docker_helper):
     docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
 
     container = docker_helper.create_container(
@@ -87,14 +112,8 @@ def clear_db(db_container):
     db_container.exec_run(['createdb', '-O', user, db], user='postgres')
 
 
-@pytest.fixture(scope='function')
-def db_container(raw_db_container):
-    clear_db(raw_db_container)
-    return raw_db_container
-
-
 @pytest.fixture(scope='module')
-def raw_amqp_container(docker_helper):
+def amqp_container(docker_helper):
     docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
 
     container = docker_helper.create_container(
@@ -113,12 +132,6 @@ def raw_amqp_container(docker_helper):
 def reset_amqp(amqp_container):
     reset_erl = 'rabbit:stop(), rabbit_mnesia:reset(), rabbit:start().'
     amqp_container.exec_run(['rabbitmqctl', 'eval', reset_erl])
-
-
-@pytest.fixture(scope='function')
-def amqp_container(raw_amqp_container):
-    reset_amqp(raw_amqp_container)
-    return raw_amqp_container
 
 
 def create_django_bootstrap_container(
@@ -164,9 +177,15 @@ def create_django_bootstrap_container(
 
 
 @pytest.fixture(scope='function')
-def web_container(docker_helper, db_container, amqp_container):
-    container = create_django_bootstrap_container(
-        docker_helper, 'web', single_container=SINGLE_CONTAINER)
+def web_container(docker_helper, rc_helper, db_container, amqp_container):
+    results = rc_helper.run_concurrent([
+        (clear_db, db_container),
+        (reset_amqp, amqp_container),
+        Runnable(
+            create_django_bootstrap_container, docker_helper, 'web',
+            single_container=SINGLE_CONTAINER),
+    ])
+    container = results[-1]
     docker_helper.start_container(container)
     wait_for_log_line(container, r'Booting worker')
     yield container
@@ -497,6 +516,7 @@ else:
         container = create_django_bootstrap_container(
             docker_helper, 'worker', command=['celery', 'worker'],
             publish_port=False)
+        reset_amqp(amqp_container)
         docker_helper.start_container(container)
         wait_for_log_line(container, r'celery@\w+ ready')
         yield container
@@ -559,6 +579,7 @@ else:
         container = create_django_bootstrap_container(
             docker_helper, 'beat', command=['celery', 'beat'],
             publish_port=False)
+        reset_amqp(amqp_container)
         docker_helper.start_container(container)
         wait_for_log_line(container, r'beat: Starting\.\.\.')
         yield container
