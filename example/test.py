@@ -80,13 +80,17 @@ def raw_db_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture(scope='class')
-def db_container(docker_helper, raw_db_container):
+def clear_db(db_container):
     db = POSTGRES_PARAMS['db']
     user = POSTGRES_PARAMS['user']
-    raw_db_container.exec_run(['createdb', '-O', user, db], user='postgres')
-    yield raw_db_container
-    raw_db_container.exec_run(['dropdb', db], user='postgres')
+    db_container.exec_run(['dropdb', db], user='postgres')
+    db_container.exec_run(['createdb', '-O', user, db], user='postgres')
+
+
+@pytest.fixture(scope='function')
+def db_container(raw_db_container):
+    clear_db(raw_db_container)
+    return raw_db_container
 
 
 @pytest.fixture(scope='module')
@@ -97,6 +101,7 @@ def raw_amqp_container(docker_helper):
         RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
             'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
             'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
+            'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
         },
         tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
     docker_helper.start_container(container)
@@ -105,16 +110,15 @@ def raw_amqp_container(docker_helper):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture(scope='class')
-def amqp_container(docker_helper, raw_amqp_container):
-    vhost = RABBITMQ_PARAMS['vhost']
-    user = RABBITMQ_PARAMS['user']
-    raw_amqp_container.exec_run(['rabbitmqctl', 'add_vhost', vhost])
-    raw_amqp_container.exec_run(
-        ['rabbitmqctl', '-p', vhost, 'set_permissions', user, '.*', '.*', '.*']
-    )
-    yield raw_amqp_container
-    raw_amqp_container.exec_run(['rabbitmqctl', 'delete_vhost', vhost])
+def reset_amqp(amqp_container):
+    reset_erl = 'rabbit:stop(), rabbit_mnesia:reset(), rabbit:start().'
+    amqp_container.exec_run(['rabbitmqctl', 'eval', reset_erl])
+
+
+@pytest.fixture(scope='function')
+def amqp_container(raw_amqp_container):
+    reset_amqp(raw_amqp_container)
+    return raw_amqp_container
 
 
 def create_django_bootstrap_container(
@@ -141,16 +145,17 @@ def create_django_bootstrap_container(
         name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
 
 
-# @pytest.fixture(scope='class')
-# def raw_web_container(docker_helper, db_container, amqp_container):
+# @pytest.fixture(scope='module')
+# def raw_web_container(docker_helper, raw_db_container, raw_amqp_container):
 #     container = create_django_bootstrap_container(
 #         docker_helper, 'web', single_container=SINGLE_CONTAINER)
 #     yield container
 #     docker_helper.remove_container(container)
 
 
-# @pytest.fixture
-# def web_container(docker_helper, raw_web_container):
+# @pytest.fixture(scope='function')
+# def web_container(docker_helper, db_container, amqp_container,
+#                   raw_web_container):
 #     skip = len(raw_web_container.logs().splitlines())
 #     docker_helper.start_container(
 #         raw_web_container, r'Booting worker', skip=skip)
@@ -158,7 +163,7 @@ def create_django_bootstrap_container(
 #     docker_helper.stop_container(raw_web_container)
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope='function')
 def web_container(docker_helper, db_container, amqp_container):
     container = create_django_bootstrap_container(
         docker_helper, 'web', single_container=SINGLE_CONTAINER)
@@ -168,7 +173,7 @@ def web_container(docker_helper, db_container, amqp_container):
     docker_helper.stop_and_remove_container(container)
 
 
-@pytest.fixture(scope='class')
+@pytest.fixture(scope='function')
 def web_client(docker_helper, web_container):
     port = docker_helper.get_container_host_port(web_container, '8000/tcp')
     with requests.Session() as session:
@@ -482,12 +487,12 @@ class TestWeb(object):
 
 
 if SINGLE_CONTAINER:
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope='function')
     def worker_container(docker_helper, web_container):
         wait_for_log_line(web_container, r'celery@\w+ ready')
         return web_container
 else:
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope='function')
     def worker_container(docker_helper, amqp_container):
         container = create_django_bootstrap_container(
             docker_helper, 'worker', command=['celery', 'worker'],
@@ -544,12 +549,12 @@ class TestCeleryWorker(object):
 
 
 if SINGLE_CONTAINER:
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope='function')
     def beat_container(docker_helper, web_container):
         wait_for_log_line(web_container, r'beat: Starting\.\.\.')
         return web_container
 else:
-    @pytest.fixture(scope='class')
+    @pytest.fixture(scope='function')
     def beat_container(docker_helper, amqp_container):
         container = create_django_bootstrap_container(
             docker_helper, 'beat', command=['celery', 'beat'],
