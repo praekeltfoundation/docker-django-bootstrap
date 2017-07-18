@@ -244,8 +244,9 @@ class TestWeb(object):
 
     def test_expected_processes_single_container(self, single_container):
         """
-        When the container is running, there should be 5 running processes:
-        tini, the Nginx master and worker, and the Gunicorn master and worker.
+        When the container is running, there should be 7 running processes:
+        tini, the Nginx master and worker, the Gunicorn master and worker, and
+        the Celery worker ("solo", non-forking) and beat processes.
         """
         ps_data = list_container_processes(single_container)
 
