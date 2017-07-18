@@ -2,7 +2,6 @@
 import json
 import logging
 import re
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -18,7 +17,12 @@ from testtools.matchers import (
 from docker_helper import (
     DockerHelper, list_container_processes, output_lines, wait_for_log_line)
 
-logging.basicConfig(stream=sys.stderr)
+
+# Turn off spam from all the random loggers that set themselves up behind us.
+for logger in logging.Logger.manager.loggerDict.values():
+    if isinstance(logger, logging.Logger):
+        logger.setLevel(logging.WARNING)
+# Turn on spam from the loggers we're interested in.
 logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
