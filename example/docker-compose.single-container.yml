@@ -1,8 +1,0 @@
-version: '2.1'
-
-services:
-  web:
-    # Override (append) these environment variables
-    environment:
-      CELERY_WORKER: 1
-      CELERY_BEAT: 1

@@ -1,0 +1,5 @@
+-e docker-helper/
+iso8601
+pytest >= 3.0.0
+requests
+testtools

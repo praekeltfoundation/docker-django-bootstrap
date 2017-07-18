@@ -1,4 +1,5 @@
-FROM praekeltfoundation/python-base:3.6
+ARG PYTHON_VERSION=2.7
+FROM praekeltfoundation/python-base:${PYTHON_VERSION}
 
 # Create the user and working directories first as they shouldn't change often.
 # Specify the UID/GIDs so that they do not change somehow and mess with the
@@ -11,7 +12,7 @@ RUN set -ex; \
     chown django:django /var/run/gunicorn /var/run/celery
 
 # Install a modern Nginx and configure
-ENV NGINX_VERSION 1.12.0-1~jessie
+ENV NGINX_VERSION 1.12.1-1~jessie
 RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
     && echo 'deb http://nginx.org/packages/debian/ jessie nginx' > /etc/apt/sources.list.d/nginx.list \
     && apt-get-install.sh "nginx=$NGINX_VERSION" \
@@ -29,5 +30,5 @@ WORKDIR /app
 
 COPY django-entrypoint.sh celery-entrypoint.sh \
     /scripts/
-ENTRYPOINT ["dinit", "django-entrypoint.sh"]
+ENTRYPOINT ["tini", "--", "django-entrypoint.sh"]
 CMD []
