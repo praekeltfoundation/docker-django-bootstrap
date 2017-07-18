@@ -1,5 +1,7 @@
 import os
 
+import pytest
+
 
 def pytest_addoption(parser):
     parser.addoption(
@@ -11,3 +13,8 @@ def pytest_addoption(parser):
 def pytest_report_header(config):
     return 'django-bootstrap docker image: {}'.format(
         config.getoption('--django-bootstrap-image'))
+
+
+@pytest.fixture(scope='session')
+def django_bootstrap_image(request):
+    return request.config.getoption('--django-bootstrap-image')
