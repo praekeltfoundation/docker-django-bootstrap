@@ -49,13 +49,6 @@ def docker_helper():
     docker_helper.teardown()
 
 
-class Runnable:
-    def __init__(self, f, *args, **kw):
-        self.f = f
-        self.args = args
-        self.kw = kw
-
-
 @pytest.fixture(scope='module')
 def raw_db_container(docker_helper):
     docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
