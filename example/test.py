@@ -167,7 +167,7 @@ def web_container(request):
 
 @pytest.fixture
 def worker_only_container(
-        django_bootstrap_image, rc_helper, docker_helper, amqp_container):
+        django_bootstrap_image, docker_helper, amqp_container):
     container = create_django_bootstrap_container(
         django_bootstrap_image, docker_helper, 'worker',
         command=['celery', 'worker'], publish_port=False)
@@ -183,8 +183,7 @@ def worker_container(request):
 
 
 @pytest.fixture
-def beat_only_container(
-        django_bootstrap_image, rc_helper, docker_helper, amqp_container):
+def beat_only_container(django_bootstrap_image, docker_helper, amqp_container):
     container = create_django_bootstrap_container(
         django_bootstrap_image, docker_helper, 'beat',
         command=['celery', 'beat'], publish_port=False)
