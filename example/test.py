@@ -7,15 +7,14 @@ from datetime import datetime, timedelta, timezone
 
 import iso8601
 import pytest
-import requests
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
-from docker_helper import (
-    DockerHelper, list_container_processes, output_lines, wait_for_log_line)
+from docker_helper import list_container_processes, output_lines
+from fixtures import *  # noqa: We import these so pytest can find them.
 
 
 # Turn off spam from all the random loggers that set themselves up behind us.
@@ -24,189 +23,6 @@ for logger in logging.Logger.manager.loggerDict.values():
         logger.setLevel(logging.WARNING)
 # Turn on spam from the loggers we're interested in.
 logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
-
-POSTGRES_IMAGE = 'postgres:9.6-alpine'
-POSTGRES_PARAMS = {
-    'service': 'db',
-    'db': 'mysite',
-    'user': 'mysite',
-    'password': 'secret',
-}
-RABBITMQ_IMAGE = 'rabbitmq:3.6-alpine'
-RABBITMQ_PARAMS = {
-    'service': 'amqp',
-    'vhost': '/mysite',
-    'user': 'mysite',
-    'password': 'secret',
-}
-DATABASE_URL = (
-    'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
-BROKER_URL = (
-    'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
-
-
-@pytest.fixture(scope='module')
-def docker_helper():
-    docker_helper = DockerHelper()
-    docker_helper.setup()
-    yield docker_helper
-    docker_helper.teardown()
-
-
-@pytest.fixture(scope='module')
-def raw_db_container(docker_helper):
-    docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
-
-    container = docker_helper.create_container(
-        POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
-            'POSTGRES_USER': POSTGRES_PARAMS['user'],
-            'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
-        },
-        tmpfs={'/var/lib/postgresql/data': 'uid=70,gid=70'})
-    docker_helper.start_container(container)
-    wait_for_log_line(
-        container, r'database system is ready to accept connections')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-def clean_db(db_container):
-    db = POSTGRES_PARAMS['db']
-    user = POSTGRES_PARAMS['user']
-    db_container.exec_run(['dropdb', db], user='postgres')
-    db_container.exec_run(['createdb', '-O', user, db], user='postgres')
-
-
-@pytest.fixture
-def db_container(request, raw_db_container):
-    if 'clean_db' in request.keywords:
-        clean_db(raw_db_container)
-    return raw_db_container
-
-
-@pytest.fixture(scope='module')
-def raw_amqp_container(docker_helper):
-    docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
-
-    container = docker_helper.create_container(
-        RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
-            'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
-            'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
-            'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
-        },
-        tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'Server startup complete')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-def clean_amqp(amqp_container):
-    reset_erl = 'rabbit:stop(), rabbit_mnesia:reset(), rabbit:start().'
-    amqp_container.exec_run(['rabbitmqctl', 'eval', reset_erl])
-
-
-@pytest.fixture
-def amqp_container(request, raw_amqp_container):
-    if 'clean_amqp' in request.keywords:
-        clean_amqp(raw_amqp_container)
-    return raw_amqp_container
-
-
-def create_django_bootstrap_container(
-        image, docker_helper, name, command=None, single_container=False,
-        publish_port=True):
-    kwargs = {
-        'command': command,
-        'environment': {
-            'SECRET_KEY': 'secret',
-            'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'DATABASE_URL': DATABASE_URL,
-            'CELERY_BROKER_URL': BROKER_URL,
-        },
-    }
-    if single_container:
-        kwargs['environment'].update({
-            'CELERY_WORKER': '1',
-            'CELERY_BEAT': '1',
-        })
-    if publish_port:
-        kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
-
-    return docker_helper.create_container(name, image, **kwargs)
-
-
-@pytest.fixture
-def single_container(
-        django_bootstrap_image, docker_helper, db_container, amqp_container):
-    container = create_django_bootstrap_container(
-        django_bootstrap_image, docker_helper, 'web', single_container=True)
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'Booting worker')
-    wait_for_log_line(container, r'celery@\w+ ready')
-    wait_for_log_line(container, r'beat: Starting\.\.\.')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-@pytest.fixture
-def web_only_container(
-        django_bootstrap_image, docker_helper, db_container, amqp_container):
-    container = create_django_bootstrap_container(
-        django_bootstrap_image, docker_helper, 'web')
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'Booting worker')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-@pytest.fixture(params=['single_container', 'web_only_container'])
-def web_container(request):
-    yield request.getfixturevalue(request.param)
-
-
-@pytest.fixture
-def worker_only_container(
-        django_bootstrap_image, docker_helper, amqp_container):
-    container = create_django_bootstrap_container(
-        django_bootstrap_image, docker_helper, 'worker',
-        command=['celery', 'worker'], publish_port=False)
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'celery@\w+ ready')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-@pytest.fixture(params=['single_container', 'worker_only_container'])
-def worker_container(request):
-    yield request.getfixturevalue(request.param)
-
-
-@pytest.fixture
-def beat_only_container(django_bootstrap_image, docker_helper, amqp_container):
-    container = create_django_bootstrap_container(
-        django_bootstrap_image, docker_helper, 'beat',
-        command=['celery', 'beat'], publish_port=False)
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'beat: Starting\.\.\.')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-@pytest.fixture(params=['single_container', 'beat_only_container'])
-def beat_container(request):
-    yield request.getfixturevalue(request.param)
-
-
-@pytest.fixture
-def web_client(docker_helper, web_container):
-    port = docker_helper.get_container_host_port(web_container, '8000/tcp')
-    with requests.Session() as session:
-        def client(path, method='GET', **kwargs):
-            return session.request(
-                method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
-
-        yield client
 
 
 class TestWeb(object):
