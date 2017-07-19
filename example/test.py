@@ -25,6 +25,16 @@ for logger in logging.Logger.manager.loggerDict.values():
 logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
 
 
+def filter_ldconfig_process(ps_data):
+    """
+    Sometimes an ldconfig process running under the django user shows up.
+    Filter it out.
+    :param ps_data: A list of tuples of user and command.
+    """
+    return [data for data in ps_data
+            if not (data[0] == 'django' and 'ldconfig' in data[1])]
+
+
 class TestWeb(object):
     def test_expected_processes(self, web_only_container):
         """
@@ -41,9 +51,7 @@ class TestWeb(object):
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
-        # Sometimes this process shows up. Ignore it.
-        ps_data = [data for data in ps_data
-                   if data != ['django', '/bin/sh /sbin/ldconfig -p']]
+        ps_data = filter_ldconfig_process(ps_data)
         assert_that(ps_data, MatchesSetwise(*map(Equals, [
             ['root', 'nginx: master process nginx -g daemon off;'],
             ['nginx', 'nginx: worker process'],
@@ -74,9 +82,7 @@ class TestWeb(object):
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
-        # Sometimes this process shows up. Ignore it.
-        ps_data = [data for data in ps_data
-                   if data != ['django', '/bin/sh /sbin/ldconfig -p']]
+        ps_data = filter_ldconfig_process(ps_data)
         assert_that(ps_data, MatchesSetwise(*map(Equals, [
             ['root', 'nginx: master process nginx -g daemon off;'],
             ['nginx', 'nginx: worker process'],
