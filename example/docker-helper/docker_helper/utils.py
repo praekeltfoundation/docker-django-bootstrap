@@ -12,25 +12,12 @@ def _last_few_log_lines(container, max_lines=100):
     return '\nLast few log lines:\n{}'.format(logs)
 
 
-def _log_lines_after(container, skip):
-    """
-    A wrapper around container.logs(stream=True) that skips some number of
-    lines before returning output.
-    """
-    skipped = 0
-    for line in container.logs(stream=True):
-        if skipped < skip:
-            skipped += 1
-        else:
-            yield line
-
-
-def wait_for_log_line(container, pattern, timeout=10, skip=0):
+def wait_for_log_line(container, pattern, timeout=10):
     try:
         # stopit.ThreadingTimeout doesn't seem to work but a Unix-only
         # solution should be fine for now :-/
         with SignalTimeout(timeout):
-            for line in _log_lines_after(container, skip):
+            for line in container.logs(stream=True):
                 # Drop the trailing newline
                 line = line.decode('utf-8').rstrip()
                 if re.search(pattern, line):
