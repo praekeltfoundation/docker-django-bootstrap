@@ -32,21 +32,46 @@ def docker_helper():
     docker_helper.teardown()
 
 
-@pytest.fixture(scope='module')
-def raw_db_container(docker_helper):
-    docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
+class ContainerDefinition(object):
+    def __init__(self, name, image, wait_lines=[], pull_image=False,
+                 **create_kwargs):
+        self.name = name
+        self.image = image
+        self.wait_lines = wait_lines
+        self.pull_image = pull_image
+        self.create_kwargs = create_kwargs
 
-    container = docker_helper.create_container(
-        POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
-            'POSTGRES_USER': POSTGRES_PARAMS['user'],
-            'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
-        },
-        tmpfs={'/var/lib/postgresql/data': 'uid=70,gid=70'})
-    docker_helper.start_container(container)
-    wait_for_log_line(
-        container, r'database system is ready to accept connections')
-    yield container
-    docker_helper.stop_and_remove_container(container)
+    def create_and_start(self, docker_helper):
+        if self.pull_image:
+            docker_helper.pull_image_if_not_found(self.image)
+
+        container = docker_helper.create_container(
+            self.name, self.image, **self.create_kwargs)
+        docker_helper.start_container(container)
+        for line in self.wait_lines:
+            wait_for_log_line(container, line)
+        return container
+
+    def fixture(self, name, scope='function'):
+        @pytest.fixture(name=name, scope=scope)
+        def _fixture(docker_helper):
+            container = self.create_and_start(docker_helper)
+            yield container
+            docker_helper.stop_and_remove_container(container)
+        return _fixture
+
+
+raw_db_container = (ContainerDefinition(
+    POSTGRES_PARAMS['service'],
+    POSTGRES_IMAGE,
+    [r'database system is ready to accept connections'],
+    pull_image=True,
+    environment={
+        'POSTGRES_USER': POSTGRES_PARAMS['user'],
+        'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
+    },
+    tmpfs={'/var/lib/postgresql/data': 'uid=70,gid=70'})
+        .fixture('raw_db_container', 'module'))
 
 
 def clean_db(db_container):
@@ -63,21 +88,18 @@ def db_container(request, raw_db_container):
     return raw_db_container
 
 
-@pytest.fixture(scope='module')
-def raw_amqp_container(docker_helper):
-    docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
-
-    container = docker_helper.create_container(
-        RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
-            'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
-            'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
-            'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
-        },
-        tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'Server startup complete')
-    yield container
-    docker_helper.stop_and_remove_container(container)
+raw_amqp_container = (ContainerDefinition(
+    RABBITMQ_PARAMS['service'],
+    RABBITMQ_IMAGE,
+    [r'Server startup complete'],
+    pull_image=True,
+    environment={
+        'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
+        'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
+        'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
+    },
+    tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
+        .fixture('raw_amqp_container', 'module'))
 
 
 def clean_amqp(amqp_container):
