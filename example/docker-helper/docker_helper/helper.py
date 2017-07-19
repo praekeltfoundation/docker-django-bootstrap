@@ -94,12 +94,6 @@ class DockerHelper(object):
         container.stop(timeout=timeout)
         assert self.container_status(container) != 'running'
 
-    def restart_container(self, container, log_line_pattern, stop_timeout=5):
-        log.info("Restarting container '{}'...".format(container.name))
-        self.stop_container(container, stop_timeout=stop_timeout)
-        skip = len(container.logs().splitlines())
-        self.start_container(container, log_line_pattern, skip=skip)
-
     def remove_container(self, container, force=True):
         log.info("Removing container '{}'...".format(container.name))
         container.remove(force=force)
