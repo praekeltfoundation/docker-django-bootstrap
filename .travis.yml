@@ -26,7 +26,7 @@ before_script:
 script:
   - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" .
   - docker build -t "mysite:$VARIANT" --build-arg VARIANT="$VARIANT" example
-  - DJANGO_BOOTSTRAP_IMAGE="mysite:$VARIANT" pytest example/test.py
+  - pytest -v example/test.py --django-bootstrap-image="mysite:$VARIANT"
 
 after_script:
   - docker images

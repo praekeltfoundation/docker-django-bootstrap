@@ -41,9 +41,12 @@ def list_container_processes(container, columns=['pid', 'ruser', 'args']):
     # usernames in the container's namespaces. `container.top()` uses 'ps' from
     # outside the container in the host's namespaces. Note that this requires
     # the container to have a 'ps' that responds to the arguments we give it.
-    ps_output = container.exec_run(['ps', 'ax', '-o', ','.join(columns)])
+    cols = ','.join(columns)
+    ps_output = container.exec_run(['ps', 'ax', '-o', cols])
     ps_lines = output_lines(ps_output)
     ps_lines.pop(0)  # Skip the header
-    ps_lines.pop()  # Drop the entry for the ps command itself
-
-    return [line.split(None, max(0, len(columns) - 1)) for line in ps_lines]
+    ps_entries = [line.split(None, max(0, len(columns) - 1))
+                  for line in ps_lines]
+    # Drop the entry for the ps command itself
+    ps_entries = [e for e in ps_entries if e[2] != 'ps ax -o {}'.format(cols)]
+    return ps_entries

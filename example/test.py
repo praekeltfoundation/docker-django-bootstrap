@@ -1,135 +1,57 @@
 #!/usr/bin/env python3
 import json
 import logging
-import os
 import re
-import sys
 import time
 from datetime import datetime, timedelta, timezone
 
 import iso8601
 import pytest
-import requests
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
-from docker_helper import (
-    DockerHelper, list_container_processes, output_lines, wait_for_log_line)
+from docker_helper import list_container_processes, output_lines
+from fixtures import *  # noqa: We import these so pytest can find them.
 
-logging.basicConfig(stream=sys.stderr)
+
+# Turn off spam from all the random loggers that set themselves up behind us.
+for logger in logging.Logger.manager.loggerDict.values():
+    if isinstance(logger, logging.Logger):
+        logger.setLevel(logging.WARNING)
+# Turn on spam from the loggers we're interested in.
 logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
 
-POSTGRES_IMAGE = 'postgres:9.6-alpine'
-POSTGRES_PARAMS = {
-    'service': 'db',
-    'db': 'mysite',
-    'user': 'mysite',
-    'password': 'secret',
-}
-RABBITMQ_IMAGE = 'rabbitmq:3.6-alpine'
-RABBITMQ_PARAMS = {
-    'service': 'amqp',
-    'vhost': '/mysite',
-    'user': 'mysite',
-    'password': 'secret',
-}
-DJANGO_BOOTSTRAP_IMAGE = os.environ.get('DJANGO_BOOTSTRAP_IMAGE', 'mysite:py3')
-DATABASE_URL = (
-    'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
-BROKER_URL = (
-    'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
 
-
-@pytest.fixture(scope='module')
-def docker_helper():
-    docker_helper = DockerHelper()
-    docker_helper.setup()
-    yield docker_helper
-    docker_helper.teardown()
-
-
-@pytest.fixture(scope='module')
-def db_container(docker_helper):
-    docker_helper.pull_image_if_not_found(POSTGRES_IMAGE)
-
-    container = docker_helper.create_container(
-        POSTGRES_PARAMS['service'], POSTGRES_IMAGE, environment={
-            'POSTGRES_DB': POSTGRES_PARAMS['db'],
-            'POSTGRES_USER': POSTGRES_PARAMS['user'],
-            'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
-        })
-    docker_helper.start_container(container)
-    wait_for_log_line(
-        container, r'database system is ready to accept connections')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-@pytest.fixture(scope='module')
-def amqp_container(docker_helper):
-    docker_helper.pull_image_if_not_found(RABBITMQ_IMAGE)
-
-    container = docker_helper.create_container(
-        RABBITMQ_PARAMS['service'], RABBITMQ_IMAGE, environment={
-            'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
-            'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
-            'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
-        })
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'Server startup complete')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-def create_django_bootstrap_container(
-        docker_helper, name, command=None, publish_port=True):
-    kwargs = {
-        'command': command,
-        'environment': {
-            'SECRET_KEY': 'secret',
-            'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'DATABASE_URL': DATABASE_URL,
-            'CELERY_BROKER_URL': BROKER_URL,
-        },
-    }
-    if publish_port:
-        kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
-
-    return docker_helper.create_container(
-        name, DJANGO_BOOTSTRAP_IMAGE, **kwargs)
-
-
-@pytest.fixture(scope='class')
-def web_container(docker_helper, db_container, amqp_container):
-    container = create_django_bootstrap_container(
-        docker_helper, 'web')
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'Booting worker')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
-@pytest.fixture(scope='class')
-def web_client(docker_helper, web_container):
-    port = docker_helper.get_container_host_port(web_container, '8000/tcp')
-
-    def client(path, method='GET', **kwargs):
-        return requests.request(
-            method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
-
-    return client
+def filter_ldconfig_process(ps_data):
+    """
+    Sometimes an ldconfig process running under the django user shows up.
+    Filter it out.
+    :param ps_data: A list of tuples of user and command.
+    """
+    return [data for data in ps_data
+            if not (data[0] == 'django' and 'ldconfig' in data[1])]
 
 
 class TestWeb(object):
-    def test_expected_processes(self, web_container):
+    def test_expected_processes(self, web_only_container):
         """
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_data = list_container_processes(web_container)
+        ps_data = list_container_processes(web_only_container)
+
+        # Sometimes it takes a little while for the processes to settle so try
+        # a few times with a delay inbetween.
+        retries = 3
+        delay = 0.5
+        for _ in range(retries):
+            if len(ps_data) == 5:
+                break
+            time.sleep(delay)
+            ps_data = list_container_processes(web_only_container)
 
         assert_that(ps_data, HasLength(5))
 
@@ -139,6 +61,7 @@ class TestWeb(object):
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
+        ps_data = filter_ldconfig_process(ps_data)
         assert_that(ps_data, MatchesSetwise(*map(Equals, [
             ['root', 'nginx: master process nginx -g daemon off;'],
             ['nginx', 'nginx: worker process'],
@@ -153,6 +76,44 @@ class TestWeb(object):
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
         ])))
 
+    def test_expected_processes_single_container(self, single_container):
+        """
+        When the container is running, there should be 7 running processes:
+        tini, the Nginx master and worker, the Gunicorn master and worker, and
+        the Celery worker ("solo", non-forking) and beat processes.
+        """
+        ps_data = list_container_processes(single_container)
+
+        assert_that(ps_data, HasLength(7))
+
+        assert_that(ps_data.pop(0), Equals(
+            ['1', 'root',
+             'tini -- django-entrypoint.sh mysite.wsgi:application']))
+
+        # The next process we have no control over the start order or PIDs...
+        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
+        ps_data = filter_ldconfig_process(ps_data)
+        assert_that(ps_data, MatchesSetwise(*map(Equals, [
+            ['root', 'nginx: master process nginx -g daemon off;'],
+            ['nginx', 'nginx: worker process'],
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+            # No obvious way to differentiate Gunicorn master from worker
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
+             '--pidfile worker.pid --concurrency 1'],
+            ['django',
+             '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
+             'beat.pid'],
+        ])))
+
+    @pytest.mark.clean_db
     def test_database_tables_created(self, db_container, web_container):
         """
         When the web container is running, a migration should have completed
@@ -387,24 +348,13 @@ class TestWeb(object):
         ))
 
 
-@pytest.fixture(scope='class')
-def worker_container(docker_helper, amqp_container):
-    container = create_django_bootstrap_container(
-        docker_helper, 'worker', command=['celery', 'worker'],
-        publish_port=False)
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'celery@\w+ ready')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
 class TestCeleryWorker(object):
-    def test_expected_processes(self, worker_container):
+    def test_expected_processes(self, worker_only_container):
         """
         When the container is running, there should be 3 running processes:
         tini, and the Celery worker master and worker.
         """
-        ps_data = list_container_processes(worker_container)
+        ps_data = list_container_processes(worker_only_container)
 
         assert_that(ps_data, HasLength(3))
 
@@ -424,6 +374,7 @@ class TestCeleryWorker(object):
              '--concurrency 1'],
         ])))
 
+    @pytest.mark.clean_amqp
     def test_amqp_queues_created(self, amqp_container, worker_container):
         """
         When the worker container is running, the three default Celery queues
@@ -442,24 +393,13 @@ class TestCeleryWorker(object):
         ))))
 
 
-@pytest.fixture(scope='class')
-def beat_container(docker_helper, amqp_container):
-    container = create_django_bootstrap_container(
-        docker_helper, 'beat', command=['celery', 'beat'],
-        publish_port=False)
-    docker_helper.start_container(container)
-    wait_for_log_line(container, r'beat: Starting\.\.\.')
-    yield container
-    docker_helper.stop_and_remove_container(container)
-
-
 class TestCeleryBeat(object):
-    def test_expected_processes(self, beat_container):
+    def test_expected_processes(self, beat_only_container):
         """
         When the container is running, there should be 2 running processes:
         tini, and the Celery beat process.
         """
-        ps_data = list_container_processes(beat_container)
+        ps_data = list_container_processes(beat_only_container)
 
         assert_that(ps_data, HasLength(2))
         assert_that(ps_data[0], Equals(
