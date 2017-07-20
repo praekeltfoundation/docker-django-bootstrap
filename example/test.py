@@ -43,6 +43,16 @@ class TestWeb(object):
         """
         ps_data = list_container_processes(web_only_container)
 
+        # Sometimes it takes a little while for the processes to settle so try
+        # a few times with a delay inbetween.
+        retries = 3
+        delay = 0.5
+        for _ in range(retries):
+            if len(ps_data) == 5:
+                break
+            time.sleep(delay)
+            ps_data = list_container_processes(web_only_container)
+
         assert_that(ps_data, HasLength(5))
 
         assert_that(ps_data.pop(0), Equals(
