@@ -42,6 +42,10 @@ class PsRow(object):
     ruser = attr.ib()
     args = attr.ib()
 
+    @classmethod
+    def columns(cls):
+        return [a.name for a in attr.fields(cls)]
+
 
 def list_container_processes(container):
     """
@@ -57,7 +61,7 @@ def list_container_processes(container):
     :param container: the container to query
     :return: a list of PsRow objects
     """
-    cmd = ['ps', 'ax', '-o', ','.join([a.name for a in attr.fields(PsRow)])]
+    cmd = ['ps', 'ax', '-o', ','.join(PsRow.columns())]
     ps_lines = output_lines(container.exec_run(cmd))
 
     header = ps_lines.pop(0)
