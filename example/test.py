@@ -14,7 +14,6 @@ from testtools.matchers import (
     MatchesRegex, MatchesSetwise, MatchesStructure, Not)
 
 from docker_helper import list_container_processes, output_lines
-from docker_helper.utils import PsRow
 from fixtures import *  # noqa: We import these so pytest can find them.
 
 
@@ -38,7 +37,8 @@ def filter_ldconfig_process(ps_rows):
 
 def assert_tini_pid_1(ps_row, cmd):
     args = 'tini -- django-entrypoint.sh {}'.format(cmd)
-    assert_that(ps_row, Equals(PsRow(pid='1', ruser='root', args=args)))
+    assert_that(ps_row,
+                MatchesStructure.byEquality(pid='1', ruser='root', args=args))
 
 
 def matches_attributes_values(attributes, values):
