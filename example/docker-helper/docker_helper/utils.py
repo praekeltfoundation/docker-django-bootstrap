@@ -1,6 +1,6 @@
 import re
-from collections import namedtuple
 
+import attr
 from stopit import SignalTimeout, TimeoutException
 
 
@@ -36,7 +36,11 @@ def output_lines(raw_output, encoding='utf-8'):
     return raw_output.decode(encoding).splitlines()
 
 
-PsRow = namedtuple('PsRow', ['pid', 'ruser', 'args'])
+@attr.s
+class PsRow(object):
+    pid = attr.ib()
+    ruser = attr.ib()
+    args = attr.ib()
 
 
 def list_container_processes(container):
@@ -53,7 +57,7 @@ def list_container_processes(container):
     :param container: the container to query
     :return: a list of PsRow objects
     """
-    cmd = ['ps', 'ax', '-o', ','.join(PsRow._fields)]
+    cmd = ['ps', 'ax', '-o', ','.join([a.name for a in attr.fields(PsRow)])]
     ps_lines = output_lines(container.exec_run(cmd))
 
     header = ps_lines.pop(0)
