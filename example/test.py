@@ -79,8 +79,6 @@ class TestWeb(object):
             time.sleep(delay)
             ps_data = list_container_processes(web_only_container)
 
-        assert_that(ps_data, HasLength(5))
-
         assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
 
         ps_data = filter_ldconfig_process(ps_data)
@@ -107,8 +105,6 @@ class TestWeb(object):
         the Celery worker ("solo", non-forking) and beat processes.
         """
         ps_data = list_container_processes(single_container)
-
-        assert_that(ps_data, HasLength(7))
 
         assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
 
@@ -378,8 +374,6 @@ class TestCeleryWorker(object):
         """
         ps_data = list_container_processes(worker_only_container)
 
-        assert_that(ps_data, HasLength(3))
-
         assert_tini_pid_1(ps_data.pop(0), 'celery worker')
 
         # The next processes we have no control over the start order or PIDs...
@@ -404,7 +398,6 @@ class TestCeleryWorker(object):
         rabbitmq_lines = output_lines(rabbitmq_output)
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
 
-        assert_that(rabbitmq_data, HasLength(3))
         assert_that(rabbitmq_data, MatchesSetwise(*map(MatchesListwise, (
             [Equals('celery'), Equals('0')],
             [MatchesRegex(r'^celeryev\..+'), Equals('0')],
