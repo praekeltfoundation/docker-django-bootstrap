@@ -14,6 +14,7 @@ from testtools.matchers import (
     MatchesRegex, MatchesSetwise, Not)
 
 from docker_helper import list_container_processes, output_lines
+from docker_helper.utils import PsRow
 from fixtures import *  # noqa: We import these so pytest can find them.
 
 
@@ -33,6 +34,11 @@ def filter_ldconfig_process(ps_data):
     """
     return [data for data in ps_data
             if not (data[0] == 'django' and 'ldconfig' in data[1])]
+
+
+def assert_tini_pid_1(ps_row, cmd):
+    args = 'tini -- django-entrypoint.sh {}'.format(cmd)
+    assert_that(ps_row, Equals(PsRow(pid='1', ruser='root', args=args)))
 
 
 class TestWeb(object):
@@ -55,9 +61,7 @@ class TestWeb(object):
 
         assert_that(ps_data, HasLength(5))
 
-        assert_that(ps_data.pop(0), Equals(
-            ('1', 'root',
-             'tini -- django-entrypoint.sh mysite.wsgi:application')))
+        assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
@@ -86,9 +90,7 @@ class TestWeb(object):
 
         assert_that(ps_data, HasLength(7))
 
-        assert_that(ps_data.pop(0), Equals(
-            ('1', 'root',
-             'tini -- django-entrypoint.sh mysite.wsgi:application')))
+        assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
@@ -358,9 +360,7 @@ class TestCeleryWorker(object):
 
         assert_that(ps_data, HasLength(3))
 
-        assert_that(ps_data.pop(0), Equals(
-            ('1', 'root',
-             'tini -- django-entrypoint.sh celery worker')))
+        assert_tini_pid_1(ps_data.pop(0), 'celery worker')
 
         # The next process we have no control over the start order or PIDs...
         ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
@@ -402,8 +402,7 @@ class TestCeleryBeat(object):
         ps_data = list_container_processes(beat_only_container)
 
         assert_that(ps_data, HasLength(2))
-        assert_that(ps_data[0], Equals(
-            ('1', 'root', 'tini -- django-entrypoint.sh celery beat')))
+        assert_tini_pid_1(ps_data[0], 'celery beat')
         # We don't know what PID we will get, so don't check it
         assert_that(ps_data[1][1:], Equals(
             ('django', '/usr/local/bin/python /usr/local/bin/celery beat')))
