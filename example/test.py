@@ -61,13 +61,40 @@ def matches_ruser_args_unordered(*expected_values):
     return MatchesSetwise(*map(row_matcher, expected_values))
 
 
+def find_prefork_worker_split(ps_rows):
+    """
+    Given a list of PsRow objects for a group of processes using a pre-fork
+    worker process model, finds the row for the "master" process as well as
+    a list of "worker" processes.
+    """
+    ppid_to_rows = {}
+    for row in ps_rows:
+        ppid_to_rows.setdefault(row.ppid, []).append(row)
+
+    # There should only be to ppids: the parent of the master and the master
+    assert len(ppid_to_rows) == 2
+
+    parent_rows = []
+    for rows in ppid_to_rows.values():
+        for row in rows:
+            if row.pid in ppid_to_rows:
+                parent_rows.append(row)
+
+    # There should be only one parent among the processes
+    assert len(parent_rows) == 1
+
+    [master_row] = parent_rows
+    return (master_row, ppid_to_rows[master_row.pid])
+
+
 class TestWeb(object):
     def test_expected_processes(self, web_only_container):
         """
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_data = list_container_processes(web_only_container)
+        ps_data = filter_ldconfig_process(
+            list_container_processes(web_only_container))
 
         # Sometimes it takes a little while for the processes to settle so try
         # a few times with a delay inbetween.
@@ -77,25 +104,49 @@ class TestWeb(object):
             if len(ps_data) == 5:
                 break
             time.sleep(delay)
-            ps_data = list_container_processes(web_only_container)
+            ps_data = filter_ldconfig_process(
+                list_container_processes(web_only_container))
 
-        assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
+        assert_that(ps_data, HasLength(5))
 
-        ps_data = filter_ldconfig_process(ps_data)
+        tini = ps_data[0]
+        assert_tini_pid_1(tini, 'mysite.wsgi:application')
 
-        # The next processes we have no control over the start order or PIDs...
-        assert_that(ps_data, matches_ruser_args_unordered(
-            ('root', 'nginx: master process nginx -g daemon off;'),
-            ('nginx', 'nginx: worker process'),
-            ('django',
+        gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
+        gunicorn_master, gunicorn_workers = (
+            find_prefork_worker_split(gunicorn_rows))
+        assert_that(gunicorn_master, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (tini.pid, 'django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
-            # No obvious way to differentiate Gunicorn master from worker
-            ('django',
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        ))
+
+        assert_that(gunicorn_workers, HasLength(1))
+        [gunicorn_worker] = gunicorn_workers
+        assert_that(gunicorn_worker, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (gunicorn_master.pid, 'django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        ))
+
+        nginx_rows = [row for row in ps_data if 'nginx' in row.args]
+        nginx_master, nginx_workers = find_prefork_worker_split(nginx_rows)
+        assert_that(nginx_master, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            # FIXME: Nginx should not be parented by Gunicorn
+            (gunicorn_master.pid, 'root',
+             'nginx: master process nginx -g daemon off;')
+        ))
+
+        assert_that(nginx_workers, HasLength(1))
+        [nginx_worker] = nginx_workers
+        assert_that(nginx_worker, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (nginx_master.pid, 'nginx', 'nginx: worker process')
         ))
 
     def test_expected_processes_single_container(self, single_container):

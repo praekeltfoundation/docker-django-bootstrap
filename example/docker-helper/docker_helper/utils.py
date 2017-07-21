@@ -39,6 +39,7 @@ def output_lines(raw_output, encoding='utf-8'):
 @attr.s
 class PsRow(object):
     pid = attr.ib()
+    ppid = attr.ib()
     ruser = attr.ib()
     args = attr.ib()
 
