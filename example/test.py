@@ -11,7 +11,7 @@ from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
-    MatchesRegex, MatchesSetwise, Not)
+    MatchesRegex, MatchesSetwise, MatchesStructure, Not)
 
 from docker_helper import list_container_processes, output_lines
 from fixtures import *  # noqa: We import these so pytest can find them.
@@ -25,14 +25,40 @@ for logger in logging.Logger.manager.loggerDict.values():
 logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
 
 
-def filter_ldconfig_process(ps_data):
+def filter_ldconfig_process(ps_rows):
     """
     Sometimes an ldconfig process running under the django user shows up.
     Filter it out.
-    :param ps_data: A list of tuples of user and command.
+    :param ps_rows: A list of PsRow objects.
     """
-    return [data for data in ps_data
-            if not (data[0] == 'django' and 'ldconfig' in data[1])]
+    return [row for row in ps_rows
+            if not (row.ruser == 'django' and 'ldconfig' in row.args)]
+
+
+def assert_tini_pid_1(ps_row, cmd):
+    args = 'tini -- django-entrypoint.sh {}'.format(cmd)
+    assert_that(ps_row,
+                MatchesStructure.byEquality(pid='1', ruser='root', args=args))
+
+
+def matches_attributes_values(attributes, values):
+    """
+    Returns a matcher that matches the values of several attributes of an
+    object.
+    """
+    return MatchesStructure.byEquality(
+        **{a: v for a, v in zip(attributes, values)})
+
+
+def matches_ruser_args_unordered(*expected_values):
+    """
+    Returns a matcher that, given a list of PsRow objects, ensures that objects
+    are present that have 'ruser' and 'args' values that match those given.
+    """
+    def row_matcher(values):
+        return matches_attributes_values(['ruser', 'args'], values)
+
+    return MatchesSetwise(*map(row_matcher, expected_values))
 
 
 class TestWeb(object):
@@ -53,28 +79,24 @@ class TestWeb(object):
             time.sleep(delay)
             ps_data = list_container_processes(web_only_container)
 
-        assert_that(ps_data, HasLength(5))
+        assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
 
-        assert_that(ps_data.pop(0), Equals(
-            ['1', 'root',
-             'tini -- django-entrypoint.sh mysite.wsgi:application']))
-
-        # The next process we have no control over the start order or PIDs...
-        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
         ps_data = filter_ldconfig_process(ps_data)
-        assert_that(ps_data, MatchesSetwise(*map(Equals, [
-            ['root', 'nginx: master process nginx -g daemon off;'],
-            ['nginx', 'nginx: worker process'],
-            ['django',
+
+        # The next processes we have no control over the start order or PIDs...
+        assert_that(ps_data, matches_ruser_args_unordered(
+            ('root', 'nginx: master process nginx -g daemon off;'),
+            ('nginx', 'nginx: worker process'),
+            ('django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
             # No obvious way to differentiate Gunicorn master from worker
-            ['django',
+            ('django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
-        ])))
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+        ))
 
     def test_expected_processes_single_container(self, single_container):
         """
@@ -84,34 +106,30 @@ class TestWeb(object):
         """
         ps_data = list_container_processes(single_container)
 
-        assert_that(ps_data, HasLength(7))
+        assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
 
-        assert_that(ps_data.pop(0), Equals(
-            ['1', 'root',
-             'tini -- django-entrypoint.sh mysite.wsgi:application']))
-
-        # The next process we have no control over the start order or PIDs...
-        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
         ps_data = filter_ldconfig_process(ps_data)
-        assert_that(ps_data, MatchesSetwise(*map(Equals, [
-            ['root', 'nginx: master process nginx -g daemon off;'],
-            ['nginx', 'nginx: worker process'],
-            ['django',
+
+        # The next processes we have no control over the start order or PIDs...
+        assert_that(ps_data, matches_ruser_args_unordered(
+            ('root', 'nginx: master process nginx -g daemon off;'),
+            ('nginx', 'nginx: worker process'),
+            ('django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
             # No obvious way to differentiate Gunicorn master from worker
-            ['django',
+            ('django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'],
-            ['django',
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
+            ('django',
              '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
-             '--pidfile worker.pid --concurrency 1'],
-            ['django',
+             '--pidfile worker.pid --concurrency 1'),
+            ('django',
              '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
-             'beat.pid'],
-        ])))
+             'beat.pid'),
+        ))
 
     @pytest.mark.clean_db
     def test_database_tables_created(self, db_container, web_container):
@@ -356,23 +374,18 @@ class TestCeleryWorker(object):
         """
         ps_data = list_container_processes(worker_only_container)
 
-        assert_that(ps_data, HasLength(3))
+        assert_tini_pid_1(ps_data.pop(0), 'celery worker')
 
-        assert_that(ps_data.pop(0), Equals(
-            ['1', 'root',
-             'tini -- django-entrypoint.sh celery worker']))
-
-        # The next process we have no control over the start order or PIDs...
-        ps_data = [data[1:] for data in ps_data]  # Ignore the PIDs
-        assert_that(ps_data, MatchesSetwise(*map(Equals, [
-            ['django',
+        # The next processes we have no control over the start order or PIDs...
+        assert_that(ps_data, matches_ruser_args_unordered(
+            ('django',
              '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1'],
+             '--concurrency 1'),
             # No obvious way to differentiate Celery master from worker
-            ['django',
+            ('django',
              '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1'],
-        ])))
+             '--concurrency 1'),
+        ))
 
     @pytest.mark.clean_amqp
     def test_amqp_queues_created(self, amqp_container, worker_container):
@@ -385,7 +398,6 @@ class TestCeleryWorker(object):
         rabbitmq_lines = output_lines(rabbitmq_output)
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
 
-        assert_that(rabbitmq_data, HasLength(3))
         assert_that(rabbitmq_data, MatchesSetwise(*map(MatchesListwise, (
             [Equals('celery'), Equals('0')],
             [MatchesRegex(r'^celeryev\..+'), Equals('0')],
@@ -402,8 +414,9 @@ class TestCeleryBeat(object):
         ps_data = list_container_processes(beat_only_container)
 
         assert_that(ps_data, HasLength(2))
-        assert_that(ps_data[0], Equals(
-            ['1', 'root', 'tini -- django-entrypoint.sh celery beat']))
+        assert_tini_pid_1(ps_data[0], 'celery beat')
         # We don't know what PID we will get, so don't check it
-        assert_that(ps_data[1][1:], Equals(
-            ['django', '/usr/local/bin/python /usr/local/bin/celery beat']))
+        assert_that(ps_data[1], MatchesStructure.byEquality(
+            ruser='django',
+            args='/usr/local/bin/python /usr/local/bin/celery beat',
+        ))

@@ -7,6 +7,7 @@ setup(
     author_email='jamie@praekelt.org',
     packages=find_packages(),
     install_requires=[
+        'attrs',
         'docker >= 2.4.0',
         'stopit >= 1.0.0',
     ],
