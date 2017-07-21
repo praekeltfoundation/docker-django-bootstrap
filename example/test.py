@@ -71,7 +71,7 @@ def find_prefork_worker_split(ps_rows):
     for row in ps_rows:
         ppid_to_rows.setdefault(row.ppid, []).append(row)
 
-    # There should only be to ppids: the parent of the master and the master
+    # There should only be two ppids: the parent of the master and the master
     assert len(ppid_to_rows) == 2
 
     parent_rows = []
