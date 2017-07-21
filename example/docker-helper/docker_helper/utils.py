@@ -1,4 +1,5 @@
 import re
+from collections import namedtuple
 
 from stopit import SignalTimeout, TimeoutException
 
@@ -35,18 +36,39 @@ def output_lines(raw_output, encoding='utf-8'):
     return raw_output.decode(encoding).splitlines()
 
 
-def list_container_processes(container, columns=['pid', 'ruser', 'args']):
-    # We use an exec here rather than `container.top()` because we want to run
-    # 'ps' inside the container. This is because we want to get PIDs and
-    # usernames in the container's namespaces. `container.top()` uses 'ps' from
-    # outside the container in the host's namespaces. Note that this requires
-    # the container to have a 'ps' that responds to the arguments we give it.
-    cols = ','.join(columns)
-    ps_output = container.exec_run(['ps', 'ax', '-o', cols])
-    ps_lines = output_lines(ps_output)
-    ps_lines.pop(0)  # Skip the header
-    ps_entries = [line.split(None, max(0, len(columns) - 1))
-                  for line in ps_lines]
-    # Drop the entry for the ps command itself
-    ps_entries = [e for e in ps_entries if e[2] != 'ps ax -o {}'.format(cols)]
-    return ps_entries
+PsRow = namedtuple('PsRow', ['pid', 'ruser', 'args'])
+
+
+def list_container_processes(container):
+    """
+    List the processes running inside a container.
+
+    We use an exec rather than `container.top()` because we want to run 'ps'
+    inside the container. This is because we want to get PIDs and usernames in
+    the container's namespaces. `container.top()` uses 'ps' from outside the
+    container in the host's namespaces. Note that this requires the container
+    to have a 'ps' that responds to the arguments we give it-- we use BusyBox's
+    (Alpine's) 'ps' as a baseline for available functionality.
+
+    :param container: the container to query
+    :return: a list of PsRow objects
+    """
+    cmd = ['ps', 'ax', '-o', ','.join(PsRow._fields)]
+    ps_lines = output_lines(container.exec_run(cmd))
+
+    header = ps_lines.pop(0)
+    # Split on the start of the header title words
+    spans = [(match.start(0), match.end(0))
+             for match in re.finditer(r'\b\w+\s*', header)]
+    spans[-1] = (spans[-1][0], None)  # Final span goes to the end of the line
+    ps_entries = [
+        [line[start:end].strip() for start, end in spans] for line in ps_lines]
+
+    # Convert to PsRows
+    ps_rows = [PsRow(*entry) for entry in ps_entries]
+
+    # Filter out the row for ps itself
+    cmd_string = ' '.join(cmd)
+    ps_rows = [row for row in ps_rows if row.args != cmd_string]
+
+    return ps_rows
