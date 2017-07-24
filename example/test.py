@@ -41,15 +41,6 @@ def assert_tini_pid_1(ps_row, cmd):
                 MatchesStructure.byEquality(pid='1', ruser='root', args=args))
 
 
-def matches_attributes_values(attributes, values):
-    """
-    Returns a matcher that matches the values of several attributes of an
-    object.
-    """
-    return MatchesStructure.byEquality(
-        **{a: v for a, v in zip(attributes, values)})
-
-
 def find_prefork_worker_split(ps_rows):
     """
     Given a list of PsRow objects for a group of processes using a pre-fork
@@ -102,9 +93,8 @@ class TestWeb(object):
         gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
         gunicorn_master, gunicorn_workers = (
             find_prefork_worker_split(gunicorn_rows))
-        assert_that(gunicorn_master, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (tini.pid, 'django',
+        assert_that(gunicorn_master, MatchesStructure.byEquality(
+            ppid=tini.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
@@ -112,9 +102,8 @@ class TestWeb(object):
 
         assert_that(gunicorn_workers, HasLength(1))
         [gunicorn_worker] = gunicorn_workers
-        assert_that(gunicorn_worker, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (gunicorn_master.pid, 'django',
+        assert_that(gunicorn_worker, MatchesStructure.byEquality(
+            ppid=gunicorn_master.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
@@ -122,18 +111,16 @@ class TestWeb(object):
 
         nginx_rows = [row for row in ps_data if 'nginx' in row.args]
         nginx_master, nginx_workers = find_prefork_worker_split(nginx_rows)
-        assert_that(nginx_master, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
+        assert_that(nginx_master, MatchesStructure.byEquality(
             # FIXME: Nginx should not be parented by Gunicorn
-            (gunicorn_master.pid, 'root',
-             'nginx: master process nginx -g daemon off;')
+            ppid=gunicorn_master.pid, ruser='root',
+            args='nginx: master process nginx -g daemon off;'
         ))
 
         assert_that(nginx_workers, HasLength(1))
         [nginx_worker] = nginx_workers
-        assert_that(nginx_worker, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (nginx_master.pid, 'nginx', 'nginx: worker process')
+        assert_that(nginx_worker, MatchesStructure.byEquality(
+            ppid=nginx_master.pid, ruser='nginx', args='nginx: worker process'
         ))
 
         # Check that we've inspected all the processes
@@ -157,9 +144,11 @@ class TestWeb(object):
         gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
         gunicorn_master, gunicorn_workers = (
             find_prefork_worker_split(gunicorn_rows))
-        assert_that(gunicorn_master, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (tini.pid, 'django',
+        gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
+        gunicorn_master, gunicorn_workers = (
+            find_prefork_worker_split(gunicorn_rows))
+        assert_that(gunicorn_master, MatchesStructure.byEquality(
+            ppid=tini.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
@@ -167,9 +156,8 @@ class TestWeb(object):
 
         assert_that(gunicorn_workers, HasLength(1))
         [gunicorn_worker] = gunicorn_workers
-        assert_that(gunicorn_worker, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (gunicorn_master.pid, 'django',
+        assert_that(gunicorn_worker, MatchesStructure.byEquality(
+            ppid=gunicorn_master.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
              '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
@@ -177,28 +165,25 @@ class TestWeb(object):
 
         nginx_rows = [row for row in ps_data if 'nginx' in row.args]
         nginx_master, nginx_workers = find_prefork_worker_split(nginx_rows)
-        assert_that(nginx_master, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
+        assert_that(nginx_master, MatchesStructure.byEquality(
             # FIXME: Nginx should not be parented by Gunicorn
-            (gunicorn_master.pid, 'root',
-             'nginx: master process nginx -g daemon off;')
+            ppid=gunicorn_master.pid, ruser='root',
+            args='nginx: master process nginx -g daemon off;'
         ))
 
         assert_that(nginx_workers, HasLength(1))
         [nginx_worker] = nginx_workers
-        assert_that(nginx_worker, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (nginx_master.pid, 'nginx', 'nginx: worker process')
+        assert_that(nginx_worker, MatchesStructure.byEquality(
+            ppid=nginx_master.pid, ruser='nginx', args='nginx: worker process'
         ))
 
         celery_worker_rows = [
             row for row in ps_data if 'celery worker' in row.args]
         assert_that(celery_worker_rows, HasLength(1))
         [celery_worker] = celery_worker_rows
-        assert_that(celery_worker, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
+        assert_that(celery_worker, MatchesStructure.byEquality(
             # FIXME: Celery worker should not be parented by Gunicorn
-            (gunicorn_master.pid, 'django',
+            ppid=gunicorn_master.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
              '--pidfile worker.pid --concurrency 1')
         ))
@@ -207,10 +192,9 @@ class TestWeb(object):
             row for row in ps_data if 'celery beat' in row.args]
         assert_that(celery_beat_rows, HasLength(1))
         [celery_beat] = celery_beat_rows
-        assert_that(celery_beat, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
+        assert_that(celery_beat, MatchesStructure.byEquality(
             # FIXME: Celery beat should not be parented by Gunicorn
-            (gunicorn_master.pid, 'django',
+            ppid=gunicorn_master.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
              'beat.pid')
         ))
@@ -475,18 +459,16 @@ class TestCeleryWorker(object):
             row for row in ps_data
             if 'celery worker' in row.args and 'tini' not in row.args]
         worker_master, worker_workers = find_prefork_worker_split(worker_rows)
-        assert_that(worker_master, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (tini.pid, 'django',
+        assert_that(worker_master, MatchesStructure.byEquality(
+            ppid=tini.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/celery worker '
              '--concurrency 1')
         ))
 
         assert_that(worker_workers, HasLength(1))
         [worker_worker] = worker_workers
-        assert_that(worker_worker, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (worker_master.pid, 'django',
+        assert_that(worker_worker, MatchesStructure.byEquality(
+            ppid=worker_master.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/celery worker '
              '--concurrency 1')
         ))
@@ -525,9 +507,8 @@ class TestCeleryBeat(object):
         assert_tini_pid_1(tini, 'celery beat')
 
         beat = ps_data[1]
-        assert_that(beat, matches_attributes_values(
-            ('ppid', 'ruser', 'args'),
-            (tini.pid, 'django',
+        assert_that(beat, MatchesStructure.byEquality(
+            ppid=tini.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/celery beat')
         ))
 
