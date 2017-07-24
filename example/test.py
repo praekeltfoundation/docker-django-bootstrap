@@ -162,30 +162,77 @@ class TestWeb(object):
         """
         ps_data = list_container_processes(single_container)
 
-        assert_tini_pid_1(ps_data.pop(0), 'mysite.wsgi:application')
+        tini = ps_data[0]
+        assert_tini_pid_1(tini, 'mysite.wsgi:application')
 
-        ps_data = filter_ldconfig_process(ps_data)
-
-        # The next processes we have no control over the start order or PIDs...
-        assert_that(ps_data, matches_ruser_args_unordered(
-            ('root', 'nginx: master process nginx -g daemon off;'),
-            ('nginx', 'nginx: worker process'),
-            ('django',
+        gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
+        gunicorn_master, gunicorn_workers = (
+            find_prefork_worker_split(gunicorn_rows))
+        assert_that(gunicorn_master, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (tini.pid, 'django',
              '/usr/local/bin/python /usr/local/bin/gunicorn '
              'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
-            # No obvious way to differentiate Gunicorn master from worker
-            ('django',
-             '/usr/local/bin/python /usr/local/bin/gunicorn '
-             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117'),
-            ('django',
-             '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
-             '--pidfile worker.pid --concurrency 1'),
-            ('django',
-             '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
-             'beat.pid'),
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
         ))
+
+        assert_that(gunicorn_workers, HasLength(1))
+        [gunicorn_worker] = gunicorn_workers
+        assert_that(gunicorn_worker, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (gunicorn_master.pid, 'django',
+             '/usr/local/bin/python /usr/local/bin/gunicorn '
+             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        ))
+
+        nginx_rows = [row for row in ps_data if 'nginx' in row.args]
+        nginx_master, nginx_workers = find_prefork_worker_split(nginx_rows)
+        assert_that(nginx_master, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            # FIXME: Nginx should not be parented by Gunicorn
+            (gunicorn_master.pid, 'root',
+             'nginx: master process nginx -g daemon off;')
+        ))
+
+        assert_that(nginx_workers, HasLength(1))
+        [nginx_worker] = nginx_workers
+        assert_that(nginx_worker, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (nginx_master.pid, 'nginx', 'nginx: worker process')
+        ))
+
+        celery_worker_rows = [
+            row for row in ps_data if 'celery worker' in row.args]
+        assert_that(celery_worker_rows, HasLength(1))
+        [celery_worker] = celery_worker_rows
+        assert_that(celery_worker, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            # FIXME: Celery worker should not be parented by Gunicorn
+            (gunicorn_master.pid, 'django',
+             '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
+             '--pidfile worker.pid --concurrency 1')
+        ))
+
+        celery_beat_rows = [
+            row for row in ps_data if 'celery beat' in row.args]
+        assert_that(celery_beat_rows, HasLength(1))
+        [celery_beat] = celery_beat_rows
+        assert_that(celery_beat, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            # FIXME: Celery beat should not be parented by Gunicorn
+            (gunicorn_master.pid, 'django',
+             '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
+             'beat.pid')
+        ))
+
+        # Check that we've inspected all the processes
+        assert_that(
+            [tini,
+             gunicorn_master, gunicorn_worker,
+             nginx_master, nginx_worker,
+             celery_worker, celery_beat],
+            MatchesSetwise(*map(Equals, ps_data)))
 
     @pytest.mark.clean_db
     def test_database_tables_created(self, db_container, web_container):
