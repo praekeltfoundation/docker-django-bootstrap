@@ -50,17 +50,6 @@ def matches_attributes_values(attributes, values):
         **{a: v for a, v in zip(attributes, values)})
 
 
-def matches_ruser_args_unordered(*expected_values):
-    """
-    Returns a matcher that, given a list of PsRow objects, ensures that objects
-    are present that have 'ruser' and 'args' values that match those given.
-    """
-    def row_matcher(values):
-        return matches_attributes_values(['ruser', 'args'], values)
-
-    return MatchesSetwise(*map(row_matcher, expected_values))
-
-
 def find_prefork_worker_split(ps_rows):
     """
     Given a list of PsRow objects for a group of processes using a pre-fork
