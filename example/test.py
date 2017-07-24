@@ -477,18 +477,34 @@ class TestCeleryWorker(object):
         """
         ps_data = list_container_processes(worker_only_container)
 
-        assert_tini_pid_1(ps_data.pop(0), 'celery worker')
+        tini = ps_data[0]
+        assert_tini_pid_1(tini, 'celery worker')
 
-        # The next processes we have no control over the start order or PIDs...
-        assert_that(ps_data, matches_ruser_args_unordered(
-            ('django',
+        # Filtering the rows here is *slightly* more complicated than elsewhere
+        # since the phrase 'celery worker' is also in the tini command
+        worker_rows = [
+            row for row in ps_data
+            if 'celery worker' in row.args and 'tini' not in row.args]
+        worker_master, worker_workers = find_prefork_worker_split(worker_rows)
+        assert_that(worker_master, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (tini.pid, 'django',
              '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1'),
-            # No obvious way to differentiate Celery master from worker
-            ('django',
-             '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1'),
+             '--concurrency 1')
         ))
+
+        assert_that(worker_workers, HasLength(1))
+        [worker_worker] = worker_workers
+        assert_that(worker_worker, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (worker_master.pid, 'django',
+             '/usr/local/bin/python /usr/local/bin/celery worker '
+             '--concurrency 1')
+        ))
+
+        # Check that we've inspected all the processes
+        assert_that([tini, worker_master, worker_worker],
+                    MatchesSetwise(*map(Equals, ps_data)))
 
     @pytest.mark.clean_amqp
     def test_amqp_queues_created(self, amqp_container, worker_container):
