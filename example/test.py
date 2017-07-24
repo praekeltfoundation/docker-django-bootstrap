@@ -107,8 +107,6 @@ class TestWeb(object):
             ps_data = filter_ldconfig_process(
                 list_container_processes(web_only_container))
 
-        assert_that(ps_data, HasLength(5))
-
         tini = ps_data[0]
         assert_tini_pid_1(tini, 'mysite.wsgi:application')
 
@@ -148,6 +146,13 @@ class TestWeb(object):
             ('ppid', 'ruser', 'args'),
             (nginx_master.pid, 'nginx', 'nginx: worker process')
         ))
+
+        # Check that we've inspected all the processes
+        assert_that(
+            [tini,
+             gunicorn_master, gunicorn_worker,
+             nginx_master, nginx_worker],
+            MatchesSetwise(*map(Equals, ps_data)))
 
     def test_expected_processes_single_container(self, single_container):
         """
