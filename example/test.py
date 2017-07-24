@@ -144,9 +144,6 @@ class TestWeb(object):
         gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
         gunicorn_master, gunicorn_workers = (
             find_prefork_worker_split(gunicorn_rows))
-        gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
-        gunicorn_master, gunicorn_workers = (
-            find_prefork_worker_split(gunicorn_rows))
         assert_that(gunicorn_master, MatchesStructure.byEquality(
             ppid=tini.pid, ruser='django', args=(
              '/usr/local/bin/python /usr/local/bin/gunicorn '
