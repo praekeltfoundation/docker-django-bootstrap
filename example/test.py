@@ -532,10 +532,14 @@ class TestCeleryBeat(object):
         """
         ps_data = list_container_processes(beat_only_container)
 
-        assert_that(ps_data, HasLength(2))
-        assert_tini_pid_1(ps_data[0], 'celery beat')
-        # We don't know what PID we will get, so don't check it
-        assert_that(ps_data[1], MatchesStructure.byEquality(
-            ruser='django',
-            args='/usr/local/bin/python /usr/local/bin/celery beat',
+        tini = ps_data[0]
+        assert_tini_pid_1(tini, 'celery beat')
+
+        beat = ps_data[1]
+        assert_that(beat, matches_attributes_values(
+            ('ppid', 'ruser', 'args'),
+            (tini.pid, 'django',
+             '/usr/local/bin/python /usr/local/bin/celery beat')
         ))
+
+        assert_that([tini, beat], MatchesSetwise(*map(Equals, ps_data)))
