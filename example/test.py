@@ -11,9 +11,10 @@ from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
-    MatchesRegex, MatchesSetwise, MatchesStructure, Not)
+    MatchesRegex, MatchesSetwise, MatchesStructure, Not, Mismatch)
 
-from docker_helper import list_container_processes, output_lines
+from docker_helper import (
+    list_container_processes, output_lines, build_process_tree)
 from fixtures import *  # noqa: We import these so pytest can find them.
 
 
@@ -35,36 +36,53 @@ def filter_ldconfig_process(ps_rows):
             if not (row.ruser == 'django' and 'ldconfig' in row.args)]
 
 
-def assert_tini_pid_1(ps_row, cmd):
-    args = 'tini -- django-entrypoint.sh {}'.format(cmd)
-    assert_that(ps_row,
-                MatchesStructure.byEquality(pid='1', ruser='root', args=args))
+class PsTreeMismatch(Mismatch):
+    def __init__(self, row_fields, child_count, fields_mm, children_mm):
+        self.row_fields = row_fields
+        self.child_count = child_count
+        self.fields_mm = fields_mm
+        self.children_mm = children_mm
+
+    def describe(self):
+        rfs = ["%s=%r" % (k, v) for k, v in sorted(self.row_fields.items())]
+        suffix = "" if self.child_count == 1 else "ren"
+        descriptions = ['PsTree({} with {} child{}) mismatch: ['.format(
+            ', '.join(rfs), self.child_count, suffix)]
+        if self.fields_mm is not None:
+            for m in self.fields_mm.mismatches:
+                for l in m.describe().splitlines():
+                    descriptions.append('  ' + l.rstrip('\n'))
+        if self.children_mm is not None:
+            descriptions.append('  mismatches in children:')
+            for l in self.children_mm.describe().splitlines():
+                descriptions.append('    ' + l.rstrip('\n'))
+        descriptions.append(']')
+        return '\n'.join(descriptions)
 
 
-def find_prefork_worker_split(ps_rows):
-    """
-    Given a list of PsRow objects for a group of processes using a pre-fork
-    worker process model, finds the row for the "master" process as well as
-    a list of "worker" processes.
-    """
-    ppid_to_rows = {}
-    for row in ps_rows:
-        ppid_to_rows.setdefault(row.ppid, []).append(row)
+class MatchesPsTree(object):
+    def __init__(self, ruser, args, ppid=None, pid=None, children=()):
+        self.row_fields = {'ruser': ruser, 'args': args}
+        if ppid is not None:
+            self.row_fields['ppid'] = ppid
+        if pid is not None:
+            self.row_fields['pid'] = pid
+        self.children = children
 
-    # There should only be two ppids: the parent of the master and the master
-    assert len(ppid_to_rows) == 2
+    def __str__(self):
+        rfs = []
+        for k, v in sorted(self.row_fields.items()):
+            rfs.append("%s=%r" % (k, v))
+        return "%s(%s, children=%s)" % (
+            self.__class__.__name__, ', '.join(rfs), str(self.children))
 
-    parent_rows = []
-    for rows in ppid_to_rows.values():
-        for row in rows:
-            if row.pid in ppid_to_rows:
-                parent_rows.append(row)
-
-    # There should be only one parent among the processes
-    assert len(parent_rows) == 1
-
-    [master_row] = parent_rows
-    return (master_row, ppid_to_rows[master_row.pid])
+    def match(self, value):
+        fields_mm = MatchesStructure.byEquality(**self.row_fields).match(
+            value.row)
+        children_mm = MatchesSetwise(*self.children).match(value.children)
+        if fields_mm is not None or children_mm is not None:
+            return PsTreeMismatch(
+                self.row_fields, len(self.children), fields_mm, children_mm)
 
 
 class TestWeb(object):
@@ -73,7 +91,7 @@ class TestWeb(object):
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_data = filter_ldconfig_process(
+        ps_rows = filter_ldconfig_process(
             list_container_processes(web_only_container))
 
         # Sometimes it takes a little while for the processes to settle so try
@@ -81,54 +99,37 @@ class TestWeb(object):
         retries = 3
         delay = 0.5
         for _ in range(retries):
-            if len(ps_data) == 5:
+            if len(ps_rows) == 5:
                 break
             time.sleep(delay)
-            ps_data = filter_ldconfig_process(
+            ps_rows = filter_ldconfig_process(
                 list_container_processes(web_only_container))
 
-        tini = ps_data[0]
-        assert_tini_pid_1(tini, 'mysite.wsgi:application')
+        ps_tree = build_process_tree(ps_rows)
 
-        gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
-        gunicorn_master, gunicorn_workers = (
-            find_prefork_worker_split(gunicorn_rows))
-        assert_that(gunicorn_master, MatchesStructure.byEquality(
-            ppid=tini.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/gunicorn '
-             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
-        ))
+        tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
+        gunicorn_master_args = (
+            '/usr/local/bin/python /usr/local/bin/gunicorn '
+            'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+            '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        gunicorn_worker_args = (
+            '/usr/local/bin/python /usr/local/bin/gunicorn '
+            'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+            '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        nginx_master_args = 'nginx: master process nginx -g daemon off;'
+        nginx_worker_args = 'nginx: worker process'
 
-        assert_that(gunicorn_workers, HasLength(1))
-        [gunicorn_worker] = gunicorn_workers
-        assert_that(gunicorn_worker, MatchesStructure.byEquality(
-            ppid=gunicorn_master.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/gunicorn '
-             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
-        ))
-
-        nginx_rows = [row for row in ps_data if 'nginx' in row.args]
-        nginx_master, nginx_workers = find_prefork_worker_split(nginx_rows)
-        assert_that(nginx_master, MatchesStructure.byEquality(
-            # FIXME: Nginx should not be parented by Gunicorn
-            ppid=gunicorn_master.pid, ruser='root',
-            args='nginx: master process nginx -g daemon off;'
-        ))
-
-        assert_that(nginx_workers, HasLength(1))
-        [nginx_worker] = nginx_workers
-        assert_that(nginx_worker, MatchesStructure.byEquality(
-            ppid=nginx_master.pid, ruser='nginx', args='nginx: worker process'
-        ))
-
-        # Check that we've inspected all the processes
         assert_that(
-            [tini,
-             gunicorn_master, gunicorn_worker,
-             nginx_master, nginx_worker],
-            MatchesSetwise(*map(Equals, ps_data)))
+            ps_tree,
+            MatchesPsTree('root', tini_args, pid='1', children=[
+                MatchesPsTree('django', gunicorn_master_args, children=[
+                    MatchesPsTree('django', gunicorn_worker_args),
+                    # FIXME: Nginx should not be parented by Gunicorn
+                    MatchesPsTree('root', nginx_master_args, children=[
+                        MatchesPsTree('nginx', nginx_worker_args),
+                    ]),
+                ]),
+            ]))
 
     def test_expected_processes_single_container(self, single_container):
         """
@@ -136,73 +137,42 @@ class TestWeb(object):
         tini, the Nginx master and worker, the Gunicorn master and worker, and
         the Celery worker ("solo", non-forking) and beat processes.
         """
-        ps_data = list_container_processes(single_container)
+        ps_rows = list_container_processes(single_container)
+        ps_tree = build_process_tree(ps_rows)
 
-        tini = ps_data[0]
-        assert_tini_pid_1(tini, 'mysite.wsgi:application')
+        tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
+        gunicorn_master_args = (
+            '/usr/local/bin/python /usr/local/bin/gunicorn '
+            'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+            '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        gunicorn_worker_args = (
+            '/usr/local/bin/python /usr/local/bin/gunicorn '
+            'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+            '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
+        nginx_master_args = 'nginx: master process nginx -g daemon off;'
+        nginx_worker_args = 'nginx: worker process'
+        celery_worker_args = (
+            '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
+            '--pidfile worker.pid --concurrency 1')
+        celery_beat_args = (
+            '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
+            'beat.pid')
 
-        gunicorn_rows = [row for row in ps_data if 'gunicorn' in row.args]
-        gunicorn_master, gunicorn_workers = (
-            find_prefork_worker_split(gunicorn_rows))
-        assert_that(gunicorn_master, MatchesStructure.byEquality(
-            ppid=tini.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/gunicorn '
-             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
-        ))
-
-        assert_that(gunicorn_workers, HasLength(1))
-        [gunicorn_worker] = gunicorn_workers
-        assert_that(gunicorn_worker, MatchesStructure.byEquality(
-            ppid=gunicorn_master.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/gunicorn '
-             'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
-             '--bind unix:/var/run/gunicorn/gunicorn.sock --umask 0117')
-        ))
-
-        nginx_rows = [row for row in ps_data if 'nginx' in row.args]
-        nginx_master, nginx_workers = find_prefork_worker_split(nginx_rows)
-        assert_that(nginx_master, MatchesStructure.byEquality(
-            # FIXME: Nginx should not be parented by Gunicorn
-            ppid=gunicorn_master.pid, ruser='root',
-            args='nginx: master process nginx -g daemon off;'
-        ))
-
-        assert_that(nginx_workers, HasLength(1))
-        [nginx_worker] = nginx_workers
-        assert_that(nginx_worker, MatchesStructure.byEquality(
-            ppid=nginx_master.pid, ruser='nginx', args='nginx: worker process'
-        ))
-
-        celery_worker_rows = [
-            row for row in ps_data if 'celery worker' in row.args]
-        assert_that(celery_worker_rows, HasLength(1))
-        [celery_worker] = celery_worker_rows
-        assert_that(celery_worker, MatchesStructure.byEquality(
-            # FIXME: Celery worker should not be parented by Gunicorn
-            ppid=gunicorn_master.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
-             '--pidfile worker.pid --concurrency 1')
-        ))
-
-        celery_beat_rows = [
-            row for row in ps_data if 'celery beat' in row.args]
-        assert_that(celery_beat_rows, HasLength(1))
-        [celery_beat] = celery_beat_rows
-        assert_that(celery_beat, MatchesStructure.byEquality(
-            # FIXME: Celery beat should not be parented by Gunicorn
-            ppid=gunicorn_master.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
-             'beat.pid')
-        ))
-
-        # Check that we've inspected all the processes
         assert_that(
-            [tini,
-             gunicorn_master, gunicorn_worker,
-             nginx_master, nginx_worker,
-             celery_worker, celery_beat],
-            MatchesSetwise(*map(Equals, ps_data)))
+            ps_tree,
+            MatchesPsTree('root', tini_args, pid='1', children=[
+                MatchesPsTree('django', gunicorn_master_args, children=[
+                    MatchesPsTree('django', gunicorn_worker_args),
+                    # FIXME: Celery worker should not be parented by Gunicorn
+                    MatchesPsTree('django', celery_worker_args),
+                    # FIXME: Celery beat should not be parented by Gunicorn
+                    MatchesPsTree('django', celery_beat_args),
+                    # FIXME: Nginx should not be parented by Gunicorn
+                    MatchesPsTree('root', nginx_master_args, children=[
+                        MatchesPsTree('nginx', nginx_worker_args),
+                    ]),
+                ]),
+            ]))
 
     @pytest.mark.clean_db
     def test_database_tables_created(self, db_container, web_container):
@@ -445,34 +415,24 @@ class TestCeleryWorker(object):
         When the container is running, there should be 3 running processes:
         tini, and the Celery worker master and worker.
         """
-        ps_data = list_container_processes(worker_only_container)
+        ps_rows = list_container_processes(worker_only_container)
+        ps_tree = build_process_tree(ps_rows)
 
-        tini = ps_data[0]
-        assert_tini_pid_1(tini, 'celery worker')
+        tini_args = 'tini -- django-entrypoint.sh celery worker'
+        celery_master_args = (
+            '/usr/local/bin/python /usr/local/bin/celery worker '
+            '--concurrency 1')
+        celery_worker_args = (
+            '/usr/local/bin/python /usr/local/bin/celery worker '
+            '--concurrency 1')
 
-        # Filtering the rows here is *slightly* more complicated than elsewhere
-        # since the phrase 'celery worker' is also in the tini command
-        worker_rows = [
-            row for row in ps_data
-            if 'celery worker' in row.args and 'tini' not in row.args]
-        worker_master, worker_workers = find_prefork_worker_split(worker_rows)
-        assert_that(worker_master, MatchesStructure.byEquality(
-            ppid=tini.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1')
-        ))
-
-        assert_that(worker_workers, HasLength(1))
-        [worker_worker] = worker_workers
-        assert_that(worker_worker, MatchesStructure.byEquality(
-            ppid=worker_master.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/celery worker '
-             '--concurrency 1')
-        ))
-
-        # Check that we've inspected all the processes
-        assert_that([tini, worker_master, worker_worker],
-                    MatchesSetwise(*map(Equals, ps_data)))
+        assert_that(
+            ps_tree,
+            MatchesPsTree('root', tini_args, pid='1', children=[
+                MatchesPsTree('django', celery_master_args, children=[
+                    MatchesPsTree('django', celery_worker_args),
+                ]),
+            ]))
 
     @pytest.mark.clean_amqp
     def test_amqp_queues_created(self, amqp_container, worker_container):
@@ -498,15 +458,14 @@ class TestCeleryBeat(object):
         When the container is running, there should be 2 running processes:
         tini, and the Celery beat process.
         """
-        ps_data = list_container_processes(beat_only_container)
+        ps_rows = list_container_processes(beat_only_container)
+        ps_tree = build_process_tree(ps_rows)
 
-        tini = ps_data[0]
-        assert_tini_pid_1(tini, 'celery beat')
+        tini_args = 'tini -- django-entrypoint.sh celery beat'
+        celery_beat_args = '/usr/local/bin/python /usr/local/bin/celery beat'
 
-        beat = ps_data[1]
-        assert_that(beat, MatchesStructure.byEquality(
-            ppid=tini.pid, ruser='django', args=(
-             '/usr/local/bin/python /usr/local/bin/celery beat')
-        ))
-
-        assert_that([tini, beat], MatchesSetwise(*map(Equals, ps_data)))
+        assert_that(
+            ps_tree,
+            MatchesPsTree('root', tini_args, pid='1', children=[
+                MatchesPsTree('django', celery_beat_args),
+            ]))
