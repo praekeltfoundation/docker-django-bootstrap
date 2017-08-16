@@ -39,12 +39,22 @@ def output_lines(raw_output, encoding='utf-8'):
 @attr.s
 class PsRow(object):
     pid = attr.ib()
+    ppid = attr.ib()
     ruser = attr.ib()
     args = attr.ib()
 
     @classmethod
     def columns(cls):
         return [a.name for a in attr.fields(cls)]
+
+
+@attr.s
+class PsTree(object):
+    row = attr.ib()
+    children = attr.ib()
+
+    def count(self):
+        return 1 + sum(row.count() for row in self.children)
 
 
 def list_container_processes(container):
@@ -80,3 +90,29 @@ def list_container_processes(container):
     ps_rows = [row for row in ps_rows if row.args != cmd_string]
 
     return ps_rows
+
+
+def _build_process_subtree(ps_rows, ps_tree):
+    for row in ps_rows:
+        if row.ppid == ps_tree.row.pid:
+            tree = PsTree(row=row, children=[])
+            ps_tree.children.append(tree)
+            _build_process_subtree(ps_rows, tree)
+
+
+def build_process_tree(ps_rows):
+    """
+    Build a tree structure from a list of PsRow objects.
+
+    :param ps_rows: a list of PsRow objects
+    :return: a PsTree object
+    """
+    ps_tree = None
+    for row in ps_rows:
+        if row.ppid == '0':
+            assert ps_tree is None
+            ps_tree = PsTree(row=row, children=[])
+    assert ps_tree is not None
+    _build_process_subtree(ps_rows, ps_tree)
+    assert ps_tree.count() == len(ps_rows)
+    return ps_tree
