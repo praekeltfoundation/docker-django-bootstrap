@@ -44,8 +44,9 @@ class PsTreeMismatch(Mismatch):
         self.children_mm = children_mm
 
     def describe(self):
-        rfs = ["%s=%r" % (k, v) for k, v in sorted(self.row_fields.items())]
-        suffix = "" if self.child_count == 1 else "ren"
+        rfs = ['{}={!r}'.format(k, v)
+               for k, v in sorted(self.row_fields.items())]
+        suffix = '' if self.child_count == 1 else 'ren'
         descriptions = ['PsTree({} with {} child{}) mismatch: ['.format(
             ', '.join(rfs), self.child_count, suffix)]
         if self.fields_mm is not None:
@@ -70,10 +71,9 @@ class MatchesPsTree(object):
         self.children = children
 
     def __str__(self):
-        rfs = []
-        for k, v in sorted(self.row_fields.items()):
-            rfs.append("%s=%r" % (k, v))
-        return "%s(%s, children=%s)" % (
+        rfs = ['{}={!r}'.format(k, v)
+               for k, v in sorted(self.row_fields.items())]
+        return '{}({}, children={})'.format(
             self.__class__.__name__, ', '.join(rfs), str(self.children))
 
     def match(self, value):
