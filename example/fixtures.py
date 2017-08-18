@@ -1,7 +1,7 @@
 import pytest
 import requests
 
-from docker_helper import DockerHelper, wait_for_log_line
+from seaworthy import DockerHelper, wait_for_log_line
 
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
