@@ -1,4 +1,4 @@
--e docker-helper/
+git+https://github.com/praekeltfoundation/seaworthy.git@ebb2f92745276f8611928098ea9430e53c5f754b#egg=seaworthy
 iso8601
 pytest >= 3.1
 pytest-catchlog

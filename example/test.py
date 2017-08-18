@@ -13,7 +13,7 @@ from testtools.matchers import (
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, MatchesStructure, Not, Mismatch)
 
-from docker_helper import (
+from seaworthy import (
     list_container_processes, output_lines, build_process_tree)
 from fixtures import *  # noqa: We import these so pytest can find them.
 
