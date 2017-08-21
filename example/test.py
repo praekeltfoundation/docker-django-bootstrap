@@ -7,14 +7,15 @@ from datetime import datetime, timedelta, timezone
 
 import iso8601
 import pytest
+from seaworthy.ps import list_container_processes, build_process_tree
+from seaworthy.testtools import MatchesPsTree
+from seaworthy.utils import output_lines
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
-    MatchesRegex, MatchesSetwise, MatchesStructure, Not, Mismatch)
+    MatchesRegex, MatchesSetwise, Not)
 
-from seaworthy import (
-    list_container_processes, output_lines, build_process_tree)
 from fixtures import *  # noqa: We import these so pytest can find them.
 
 
@@ -34,55 +35,6 @@ def filter_ldconfig_process(ps_rows):
     """
     return [row for row in ps_rows
             if not (row.ruser == 'django' and 'ldconfig' in row.args)]
-
-
-class PsTreeMismatch(Mismatch):
-    def __init__(self, row_fields, child_count, fields_mm, children_mm):
-        self.row_fields = row_fields
-        self.child_count = child_count
-        self.fields_mm = fields_mm
-        self.children_mm = children_mm
-
-    def describe(self):
-        rfs = ['{}={!r}'.format(k, v)
-               for k, v in sorted(self.row_fields.items())]
-        suffix = '' if self.child_count == 1 else 'ren'
-        descriptions = ['PsTree({} with {} child{}) mismatch: ['.format(
-            ', '.join(rfs), self.child_count, suffix)]
-        if self.fields_mm is not None:
-            for m in self.fields_mm.mismatches:
-                for l in m.describe().splitlines():
-                    descriptions.append('  ' + l.rstrip('\n'))
-        if self.children_mm is not None:
-            descriptions.append('  mismatches in children:')
-            for l in self.children_mm.describe().splitlines():
-                descriptions.append('    ' + l.rstrip('\n'))
-        descriptions.append(']')
-        return '\n'.join(descriptions)
-
-
-class MatchesPsTree(object):
-    def __init__(self, ruser, args, ppid=None, pid=None, children=()):
-        self.row_fields = {'ruser': ruser, 'args': args}
-        if ppid is not None:
-            self.row_fields['ppid'] = ppid
-        if pid is not None:
-            self.row_fields['pid'] = pid
-        self.children = children
-
-    def __str__(self):
-        rfs = ['{}={!r}'.format(k, v)
-               for k, v in sorted(self.row_fields.items())]
-        return '{}({}, children={})'.format(
-            self.__class__.__name__, ', '.join(rfs), str(self.children))
-
-    def match(self, value):
-        fields_mm = MatchesStructure.byEquality(**self.row_fields).match(
-            value.row)
-        children_mm = MatchesSetwise(*self.children).match(value.children)
-        if fields_mm is not None or children_mm is not None:
-            return PsTreeMismatch(
-                self.row_fields, len(self.children), fields_mm, children_mm)
 
 
 class TestWeb(object):
@@ -121,7 +73,7 @@ class TestWeb(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', gunicorn_master_args, children=[
                     MatchesPsTree('django', gunicorn_worker_args),
                     # FIXME: Nginx should not be parented by Gunicorn
@@ -160,7 +112,7 @@ class TestWeb(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', gunicorn_master_args, children=[
                     MatchesPsTree('django', gunicorn_worker_args),
                     # FIXME: Celery worker should not be parented by Gunicorn
@@ -428,7 +380,7 @@ class TestCeleryWorker(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', celery_master_args, children=[
                     MatchesPsTree('django', celery_worker_args),
                 ]),
@@ -466,6 +418,6 @@ class TestCeleryBeat(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', celery_beat_args),
             ]))
