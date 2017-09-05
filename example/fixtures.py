@@ -1,7 +1,8 @@
 import pytest
 import requests
 
-from seaworthy import DockerHelper, wait_for_log_line
+from seaworthy import DockerHelper, wait_for_logs_matching
+from seaworthy.logs import RegexMatcher
 
 
 POSTGRES_IMAGE = 'postgres:9.6-alpine'
@@ -22,6 +23,11 @@ DATABASE_URL = (
     'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
 BROKER_URL = (
     'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
+
+
+def wait_for_logs(container, patterns):
+    for pattern in patterns:
+        wait_for_logs_matching(container, RegexMatcher(pattern))
 
 
 @pytest.fixture(scope='module')
@@ -48,8 +54,7 @@ class ContainerDefinition(object):
         container = docker_helper.create_container(
             self.name, self.image, **self.create_kwargs)
         docker_helper.start_container(container)
-        for line in self.wait_lines:
-            wait_for_log_line(container, line)
+        wait_for_logs(container, self.wait_lines)
         return container
 
     def fixture(self, name, scope='function'):
@@ -149,8 +154,7 @@ def make_app_container(
             command=command, single_container=single_container,
             publish_port=publish_port)
         docker_helper.start_container(container)
-        for line in wait_lines:
-            wait_for_log_line(container, line)
+        wait_for_logs(container, wait_lines)
         yield container
         docker_helper.stop_and_remove_container(container)
     return app_container
@@ -158,7 +162,7 @@ def make_app_container(
 
 single_container = make_app_container(
     'single_container', 'web', ['db_container', 'amqp_container'],
-    [r'Booting worker', r'celery@\w+ ready', 'beat: Starting\.\.\.'],
+    [r'Booting worker', r'celery@\w+ ready', r'beat: Starting\.\.\.'],
     single_container=True)
 
 web_only_container = make_app_container(
