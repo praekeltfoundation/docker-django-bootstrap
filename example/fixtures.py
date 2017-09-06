@@ -3,13 +3,11 @@ import requests
 
 from seaworthy import DockerHelper, wait_for_logs_matching
 from seaworthy.logs import RegexMatcher
+from seaworthy.containers.base import ContainerBase
 from seaworthy.containers.provided import (
     PostgreSQLContainer, RabbitMQContainer)
-
-
-def wait_for_logs(container, patterns):
-    for pattern in patterns:
-        wait_for_logs_matching(container, RegexMatcher(pattern))
+from seaworthy.ps import list_container_processes
+from seaworthy.utils import output_lines
 
 
 @pytest.fixture(scope='module')
@@ -18,34 +16,6 @@ def docker_helper():
     docker_helper.setup()
     yield docker_helper
     docker_helper.teardown()
-
-
-class ContainerDefinition(object):
-    def __init__(self, name, image, wait_lines=[], pull_image=False,
-                 **create_kwargs):
-        self.name = name
-        self.image = image
-        self.wait_lines = wait_lines
-        self.pull_image = pull_image
-        self.create_kwargs = create_kwargs
-
-    def create_and_start(self, docker_helper):
-        if self.pull_image:
-            docker_helper.pull_image_if_not_found(self.image)
-
-        container = docker_helper.create_container(
-            self.name, self.image, **self.create_kwargs)
-        docker_helper.start_container(container)
-        wait_for_logs(container, self.wait_lines)
-        return container
-
-    def fixture(self, name, scope='function'):
-        @pytest.fixture(name=name, scope=scope)
-        def _fixture(docker_helper):
-            container = self.create_and_start(docker_helper)
-            yield container
-            docker_helper.stop_and_remove_container(container)
-        return _fixture
 
 
 def mk_seaworthy_fixture(name, container_cls, scope='function', **kwargs):
@@ -80,8 +50,31 @@ def amqp_container(request, raw_amqp_container):
     return raw_amqp_container
 
 
+class DjangoBootstrapContainer(ContainerBase):
+    def __init__(self, name, image, wait_patterns, kwargs):
+        super().__init__(name, image, wait_patterns)
+        self._kwargs = kwargs
+
+    def create_kwargs(self):
+        return self._kwargs
+
+    def wait_for_start(self, docker_helper, container):
+        if self.wait_matchers:
+            for matcher in self.wait_matchers:
+                wait_for_logs_matching(container, matcher)
+
+    def list_processes(self):
+        return list_container_processes(self.inner())
+
+    def stdout_logs(self):
+        return output_lines(self.inner().logs(stdout=True, stderr=False))
+
+    def exec_find(self, params):
+        return output_lines(self.inner().exec_run(['find'] + params))
+
+
 def create_django_bootstrap_container(
-        image, docker_helper, name, command=None, single_container=False,
+        image, name, wait_lines, command=None, single_container=False,
         publish_port=True):
     # FIXME: Get these URLs in a better way.
     database_url = PostgreSQLContainer().database_url()
@@ -103,7 +96,7 @@ def create_django_bootstrap_container(
     if publish_port:
         kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-    return docker_helper.create_container(name, image, **kwargs)
+    return DjangoBootstrapContainer(name, image, wait_lines, kwargs)
 
 
 def make_app_container(
@@ -114,13 +107,12 @@ def make_app_container(
         for fix in other_fixtures:
             request.getfixturevalue(fix)
         container = create_django_bootstrap_container(
-            django_bootstrap_image, docker_helper, container_name,
+            django_bootstrap_image, container_name, wait_lines,
             command=command, single_container=single_container,
             publish_port=publish_port)
-        docker_helper.start_container(container)
-        wait_for_logs(container, wait_lines)
+        container.create_and_start(docker_helper)
         yield container
-        docker_helper.stop_and_remove_container(container)
+        container.stop_and_remove(docker_helper)
     return app_container
 
 
@@ -161,7 +153,8 @@ beat_container = make_multi_container(
 
 @pytest.fixture
 def web_client(docker_helper, web_container):
-    port = docker_helper.get_container_host_port(web_container, '8000/tcp')
+    port = docker_helper.get_container_host_port(
+        web_container.inner(), '8000/tcp')
     with requests.Session() as session:
         def client(path, method='GET', **kwargs):
             return session.request(
