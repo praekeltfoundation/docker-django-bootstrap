@@ -132,14 +132,9 @@ class TestWeb(object):
         When the web container is running, a migration should have completed
         and there should be some tables in the database.
         """
-        psql_output = db_container.exec_run(
-            ['psql', '-qtA', '--dbname', 'mysite', '-c',
-             ('SELECT COUNT(*) FROM information_schema.tables WHERE '
-              "table_schema='public';")],
-            user='postgres').decode('utf-8')
-
-        count = int(psql_output.strip())
-        assert_that(count, GreaterThan(0))
+        public_tables = [
+            r[1] for r in db_container.list_tables() if r[0] == 'public']
+        assert_that(len(public_tables), GreaterThan(0))
 
     def test_admin_site_live(self, web_client):
         """
@@ -392,8 +387,8 @@ class TestCeleryWorker(object):
         When the worker container is running, the three default Celery queues
         should have been created in RabbitMQ.
         """
-        rabbitmq_output = amqp_container.exec_run(
-            ['rabbitmqctl', '-q', 'list_queues', '-p', '/mysite'])
+        rabbitmq_output = amqp_container.exec_rabbitmqctl(
+            'list_queues', ['-p', '/mysite'])
         rabbitmq_lines = output_lines(rabbitmq_output)
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
 

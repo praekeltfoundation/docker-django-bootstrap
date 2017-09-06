@@ -3,26 +3,8 @@ import requests
 
 from seaworthy import DockerHelper, wait_for_logs_matching
 from seaworthy.logs import RegexMatcher
-
-
-POSTGRES_IMAGE = 'postgres:9.6-alpine'
-POSTGRES_PARAMS = {
-    'service': 'db',
-    'db': 'mysite',
-    'user': 'mysite',
-    'password': 'secret',
-}
-RABBITMQ_IMAGE = 'rabbitmq:3.6-alpine'
-RABBITMQ_PARAMS = {
-    'service': 'amqp',
-    'vhost': '/mysite',
-    'user': 'mysite',
-    'password': 'secret',
-}
-DATABASE_URL = (
-    'postgres://{user}:{password}@{service}/{db}'.format(**POSTGRES_PARAMS))
-BROKER_URL = (
-    'amqp://{user}:{password}@{service}/{vhost}'.format(**RABBITMQ_PARAMS))
+from seaworthy.containers.provided import (
+    PostgreSQLContainer, RabbitMQContainer)
 
 
 def wait_for_logs(container, patterns):
@@ -66,69 +48,51 @@ class ContainerDefinition(object):
         return _fixture
 
 
-raw_db_container = (ContainerDefinition(
-    POSTGRES_PARAMS['service'],
-    POSTGRES_IMAGE,
-    [r'database system is ready to accept connections'],
-    pull_image=True,
-    environment={
-        'POSTGRES_USER': POSTGRES_PARAMS['user'],
-        'POSTGRES_PASSWORD': POSTGRES_PARAMS['password'],
-    },
-    tmpfs={'/var/lib/postgresql/data': 'uid=70,gid=70'})
-        .fixture('raw_db_container', 'module'))
+def mk_seaworthy_fixture(name, container_cls, scope='function', **kwargs):
+    @pytest.fixture(name=name, scope=scope)
+    def _fixture(docker_helper):
+        container = container_cls(**kwargs)
+        container.create_and_start(docker_helper)
+        yield container
+        container.stop_and_remove(docker_helper)
+    return _fixture
 
 
-def clean_db(db_container):
-    db = POSTGRES_PARAMS['db']
-    user = POSTGRES_PARAMS['user']
-    db_container.exec_run(['dropdb', db], user='postgres')
-    db_container.exec_run(['createdb', '-O', user, db], user='postgres')
+raw_db_container = mk_seaworthy_fixture(
+    'raw_db_container', PostgreSQLContainer, 'module')
 
 
 @pytest.fixture
 def db_container(request, raw_db_container):
     if 'clean_db' in request.keywords:
-        clean_db(raw_db_container)
+        raw_db_container.clean()
     return raw_db_container
 
 
-raw_amqp_container = (ContainerDefinition(
-    RABBITMQ_PARAMS['service'],
-    RABBITMQ_IMAGE,
-    [r'Server startup complete'],
-    pull_image=True,
-    environment={
-        'RABBITMQ_DEFAULT_USER': RABBITMQ_PARAMS['user'],
-        'RABBITMQ_DEFAULT_PASS': RABBITMQ_PARAMS['password'],
-        'RABBITMQ_DEFAULT_VHOST': RABBITMQ_PARAMS['vhost'],
-    },
-    tmpfs={'/var/lib/rabbitmq': 'uid=100,gid=101'})
-        .fixture('raw_amqp_container', 'module'))
-
-
-def clean_amqp(amqp_container):
-    reset_erl = 'rabbit:stop(), rabbit_mnesia:reset(), rabbit:start().'
-    amqp_container.exec_run(['rabbitmqctl', 'eval', reset_erl])
+raw_amqp_container = mk_seaworthy_fixture(
+    'raw_amqp_container', RabbitMQContainer, 'module', vhost='/mysite')
 
 
 @pytest.fixture
 def amqp_container(request, raw_amqp_container):
     if 'clean_amqp' in request.keywords:
-        clean_amqp(raw_amqp_container)
+        raw_amqp_container.clean()
     return raw_amqp_container
 
 
 def create_django_bootstrap_container(
         image, docker_helper, name, command=None, single_container=False,
         publish_port=True):
+    # FIXME: Get these URLs in a better way.
+    database_url = PostgreSQLContainer().database_url()
+    celery_broker_url = RabbitMQContainer(vhost='/mysite').broker_url()
     kwargs = {
         'command': command,
         'environment': {
             'SECRET_KEY': 'secret',
             'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'DATABASE_URL': DATABASE_URL,
-            'CELERY_BROKER_URL': BROKER_URL,
+            'DATABASE_URL': database_url,
+            'CELERY_BROKER_URL': celery_broker_url,
         },
     }
     if single_container:
