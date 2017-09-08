@@ -1,53 +1,21 @@
 import pytest
 import requests
 
-from seaworthy import DockerHelper, wait_for_logs_matching
-from seaworthy.logs import RegexMatcher
+from seaworthy import wait_for_logs_matching
 from seaworthy.containers.base import ContainerBase
 from seaworthy.containers.provided import (
     PostgreSQLContainer, RabbitMQContainer)
 from seaworthy.ps import list_container_processes
+from seaworthy.pytest.fixtures import clean_container_fixtures
 from seaworthy.utils import output_lines
 
 
-@pytest.fixture(scope='module')
-def docker_helper():
-    docker_helper = DockerHelper()
-    docker_helper.setup()
-    yield docker_helper
-    docker_helper.teardown()
+raw_db_container, db_container = clean_container_fixtures(
+    PostgreSQLContainer(), 'db_container', scope='module')
 
 
-def mk_seaworthy_fixture(name, container_cls, scope='function', **kwargs):
-    @pytest.fixture(name=name, scope=scope)
-    def _fixture(docker_helper):
-        container = container_cls(**kwargs)
-        container.create_and_start(docker_helper)
-        yield container
-        container.stop_and_remove(docker_helper)
-    return _fixture
-
-
-raw_db_container = mk_seaworthy_fixture(
-    'raw_db_container', PostgreSQLContainer, 'module')
-
-
-@pytest.fixture
-def db_container(request, raw_db_container):
-    if 'clean_db' in request.keywords:
-        raw_db_container.clean()
-    return raw_db_container
-
-
-raw_amqp_container = mk_seaworthy_fixture(
-    'raw_amqp_container', RabbitMQContainer, 'module', vhost='/mysite')
-
-
-@pytest.fixture
-def amqp_container(request, raw_amqp_container):
-    if 'clean_amqp' in request.keywords:
-        raw_amqp_container.clean()
-    return raw_amqp_container
+raw_amqp_container, amqp_container = clean_container_fixtures(
+    RabbitMQContainer(vhost='/mysite'), 'amqp_container', scope='module')
 
 
 class DjangoBootstrapContainer(ContainerBase):
@@ -74,8 +42,11 @@ class DjangoBootstrapContainer(ContainerBase):
 
 
 def create_django_bootstrap_container(
-        image, name, wait_lines, command=None, single_container=False,
-        publish_port=True):
+        request, name, wait_lines, command=None, single_container=False,
+        publish_port=True, other_fixtures=()):
+    for fix in other_fixtures:
+        request.getfixturevalue(fix)
+    image = request.getfixturevalue('django_bootstrap_image')
     # FIXME: Get these URLs in a better way.
     database_url = PostgreSQLContainer().database_url()
     celery_broker_url = RabbitMQContainer(vhost='/mysite').broker_url()
@@ -99,21 +70,29 @@ def create_django_bootstrap_container(
     return DjangoBootstrapContainer(name, image, wait_lines, kwargs)
 
 
-def make_app_container(
-        name, container_name, other_fixtures, wait_lines, command=None,
-        single_container=False, publish_port=True):
-    @pytest.fixture(name=name)
-    def app_container(request, django_bootstrap_image, docker_helper):
-        for fix in other_fixtures:
-            request.getfixturevalue(fix)
-        container = create_django_bootstrap_container(
-            django_bootstrap_image, container_name, wait_lines,
-            command=command, single_container=single_container,
-            publish_port=publish_port)
+def container_factory_fixture(factory, name, kwargs, scope='function'):
+    @pytest.fixture(name=name, scope=scope)
+    def raw_fixture(request, docker_helper):
+        container = factory(request, **kwargs)
         container.create_and_start(docker_helper)
         yield container
         container.stop_and_remove(docker_helper)
-    return app_container
+
+    return raw_fixture
+
+
+def make_app_container(
+        name, container_name, other_fixtures, wait_lines, command=None,
+        single_container=False, publish_port=True):
+    return container_factory_fixture(
+        create_django_bootstrap_container, name, kwargs={
+            'name': container_name,
+            'wait_lines': wait_lines,
+            'command': command,
+            'single_container': single_container,
+            'publish_port': publish_port,
+            'other_fixtures': other_fixtures,
+        })
 
 
 single_container = make_app_container(
@@ -164,7 +143,7 @@ def web_client(docker_helper, web_container):
 
 
 __all__ = [
-    'docker_helper', 'raw_db_container', 'db_container', 'raw_amqp_container',
+    'raw_db_container', 'db_container', 'raw_amqp_container',
     'amqp_container', 'single_container', 'web_only_container',
     'worker_only_container', 'beat_only_container', 'web_container',
     'worker_container', 'beat_container', 'web_client']
