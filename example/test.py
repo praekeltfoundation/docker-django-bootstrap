@@ -7,14 +7,15 @@ from datetime import datetime, timedelta, timezone
 
 import iso8601
 import pytest
+from seaworthy.ps import build_process_tree
+from seaworthy.testtools import MatchesPsTree
+from seaworthy.utils import output_lines
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
-    MatchesRegex, MatchesSetwise, MatchesStructure, Not, Mismatch)
+    MatchesRegex, MatchesSetwise, Not)
 
-from docker_helper import (
-    list_container_processes, output_lines, build_process_tree)
 from fixtures import *  # noqa: We import these so pytest can find them.
 
 
@@ -36,63 +37,13 @@ def filter_ldconfig_process(ps_rows):
             if not (row.ruser == 'django' and 'ldconfig' in row.args)]
 
 
-class PsTreeMismatch(Mismatch):
-    def __init__(self, row_fields, child_count, fields_mm, children_mm):
-        self.row_fields = row_fields
-        self.child_count = child_count
-        self.fields_mm = fields_mm
-        self.children_mm = children_mm
-
-    def describe(self):
-        rfs = ['{}={!r}'.format(k, v)
-               for k, v in sorted(self.row_fields.items())]
-        suffix = '' if self.child_count == 1 else 'ren'
-        descriptions = ['PsTree({} with {} child{}) mismatch: ['.format(
-            ', '.join(rfs), self.child_count, suffix)]
-        if self.fields_mm is not None:
-            for m in self.fields_mm.mismatches:
-                for l in m.describe().splitlines():
-                    descriptions.append('  ' + l.rstrip('\n'))
-        if self.children_mm is not None:
-            descriptions.append('  mismatches in children:')
-            for l in self.children_mm.describe().splitlines():
-                descriptions.append('    ' + l.rstrip('\n'))
-        descriptions.append(']')
-        return '\n'.join(descriptions)
-
-
-class MatchesPsTree(object):
-    def __init__(self, ruser, args, ppid=None, pid=None, children=()):
-        self.row_fields = {'ruser': ruser, 'args': args}
-        if ppid is not None:
-            self.row_fields['ppid'] = ppid
-        if pid is not None:
-            self.row_fields['pid'] = pid
-        self.children = children
-
-    def __str__(self):
-        rfs = ['{}={!r}'.format(k, v)
-               for k, v in sorted(self.row_fields.items())]
-        return '{}({}, children={})'.format(
-            self.__class__.__name__, ', '.join(rfs), str(self.children))
-
-    def match(self, value):
-        fields_mm = MatchesStructure.byEquality(**self.row_fields).match(
-            value.row)
-        children_mm = MatchesSetwise(*self.children).match(value.children)
-        if fields_mm is not None or children_mm is not None:
-            return PsTreeMismatch(
-                self.row_fields, len(self.children), fields_mm, children_mm)
-
-
 class TestWeb(object):
     def test_expected_processes(self, web_only_container):
         """
         When the container is running, there should be 5 running processes:
         tini, the Nginx master and worker, and the Gunicorn master and worker.
         """
-        ps_rows = filter_ldconfig_process(
-            list_container_processes(web_only_container))
+        ps_rows = filter_ldconfig_process(web_only_container.list_processes())
 
         # Sometimes it takes a little while for the processes to settle so try
         # a few times with a delay inbetween.
@@ -103,7 +54,7 @@ class TestWeb(object):
                 break
             time.sleep(delay)
             ps_rows = filter_ldconfig_process(
-                list_container_processes(web_only_container))
+                web_only_container.list_processes())
 
         ps_tree = build_process_tree(ps_rows)
 
@@ -121,7 +72,7 @@ class TestWeb(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', gunicorn_master_args, children=[
                     MatchesPsTree('django', gunicorn_worker_args),
                     # FIXME: Nginx should not be parented by Gunicorn
@@ -137,7 +88,7 @@ class TestWeb(object):
         tini, the Nginx master and worker, the Gunicorn master and worker, and
         the Celery worker ("solo", non-forking) and beat processes.
         """
-        ps_rows = list_container_processes(single_container)
+        ps_rows = single_container.list_processes()
         ps_tree = build_process_tree(ps_rows)
 
         tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
@@ -160,7 +111,7 @@ class TestWeb(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', gunicorn_master_args, children=[
                     MatchesPsTree('django', gunicorn_worker_args),
                     # FIXME: Celery worker should not be parented by Gunicorn
@@ -180,14 +131,9 @@ class TestWeb(object):
         When the web container is running, a migration should have completed
         and there should be some tables in the database.
         """
-        psql_output = db_container.exec_run(
-            ['psql', '-qtA', '--dbname', 'mysite', '-c',
-             ('SELECT COUNT(*) FROM information_schema.tables WHERE '
-              "table_schema='public';")],
-            user='postgres').decode('utf-8')
-
-        count = int(psql_output.strip())
-        assert_that(count, GreaterThan(0))
+        public_tables = [
+            r[1] for r in db_container.list_tables() if r[0] == 'public']
+        assert_that(len(public_tables), GreaterThan(0))
 
     def test_admin_site_live(self, web_client):
         """
@@ -209,16 +155,14 @@ class TestWeb(object):
         # Wait a little bit so that previous tests' requests have been written
         # to the log.
         time.sleep(0.2)
-        before_lines = output_lines(
-            web_container.logs(stdout=True, stderr=False))
+        before_lines = web_container.stdout_logs()
 
         # Make a request to see the logs for it
         web_client('/')
 
         # Wait a little bit so that our request has been written to the log.
         time.sleep(0.2)
-        after_lines = output_lines(
-            web_container.logs(stdout=True, stderr=False))
+        after_lines = web_container.stdout_logs()
 
         new_lines = after_lines[len(before_lines):]
         assert_that(len(new_lines), GreaterThan(0))
@@ -270,10 +214,10 @@ class TestWeb(object):
         ManifestStaticFilesStorage system is requested, that file should be
         served with a far-future 'Cache-Control' header.
         """
-        hashed_svg = web_container.exec_run(
-            ['find', 'static/admin/img', '-regextype', 'posix-egrep', '-regex',
+        hashed_svg = web_container.exec_find(
+            ['static/admin/img', '-regextype', 'posix-egrep', '-regex',
              '.*\.[a-f0-9]{12}\.svg$'])
-        test_file = output_lines(hashed_svg)[0]
+        test_file = hashed_svg[0]
 
         response = web_client('/' + test_file)
 
@@ -287,9 +231,9 @@ class TestWeb(object):
         is requested, that file should be served with a far-future
         'Cache-Control' header.
         """
-        compressed_js = web_container.exec_run(
-            ['find', 'static/CACHE/js', '-name', '*.js'])
-        test_file = output_lines(compressed_js)[0]
+        compressed_js = web_container.exec_find(
+            ['static/CACHE/js', '-name', '*.js'])
+        test_file = compressed_js[0]
 
         response = web_client('/' + test_file)
 
@@ -304,9 +248,9 @@ class TestWeb(object):
         requested, that file should be served with a far-future 'Cache-Control'
         header.
         """
-        compressed_js = web_container.exec_run(
-            ['find', 'static/CACHE/css', '-name', '*.css'])
-        test_file = output_lines(compressed_js)[0]
+        compressed_js = web_container.exec_find(
+            ['static/CACHE/css', '-name', '*.css'])
+        test_file = compressed_js[0]
 
         response = web_client('/' + test_file)
 
@@ -320,9 +264,9 @@ class TestWeb(object):
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should be served gzipped.
         """
-        css_to_gzip = web_container.exec_run(
-            ['find', 'static', '-name', '*.css', '-size', '+1024c'])
-        test_file = output_lines(css_to_gzip)[0]
+        css_to_gzip = web_container.exec_find(
+            ['static', '-name', '*.css', '-size', '+1024c'])
+        test_file = css_to_gzip[0]
 
         response = web_client('/' + test_file,
                               headers={'Accept-Encoding': 'gzip'})
@@ -337,9 +281,9 @@ class TestWeb(object):
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should not be served gzipped as it is already a compressed format.
         """
-        woff_to_not_gzip = web_container.exec_run(
-            ['find', 'static', '-name', '*.woff', '-size', '+1024c'])
-        test_file = output_lines(woff_to_not_gzip)[0]
+        woff_to_not_gzip = web_container.exec_find(
+            ['static', '-name', '*.woff', '-size', '+1024c'])
+        test_file = woff_to_not_gzip[0]
 
         response = web_client('/' + test_file,
                               headers={'Accept-Encoding': 'gzip'})
@@ -358,9 +302,9 @@ class TestWeb(object):
         the file should not be served gzipped, but the 'Vary' header should be
         set to 'Accept-Encoding'.
         """
-        css_to_gzip = web_container.exec_run(
-            ['find', 'static', '-name', '*.css', '-size', '+1024c'])
-        test_file = output_lines(css_to_gzip)[0]
+        css_to_gzip = web_container.exec_find(
+            ['static', '-name', '*.css', '-size', '+1024c'])
+        test_file = css_to_gzip[0]
 
         response = web_client('/' + test_file,
                               headers={'Accept-Encoding': ''})
@@ -377,9 +321,9 @@ class TestWeb(object):
         'Accept-Encoding' header lists gzip as an accepted encoding and the
         'Via' header is set, the file should be served gzipped.
         """
-        css_to_gzip = web_container.exec_run(
-            ['find', 'static', '-name', '*.css', '-size', '+1024c'])
-        test_file = output_lines(css_to_gzip)[0]
+        css_to_gzip = web_container.exec_find(
+            ['static', '-name', '*.css', '-size', '+1024c'])
+        test_file = css_to_gzip[0]
 
         response = web_client(
             '/' + test_file,
@@ -395,9 +339,9 @@ class TestWeb(object):
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
         should not be served gzipped.
         """
-        css_to_gzip = web_container.exec_run(
-            ['find', 'static', '-name', '*.css', '-size', '-1024c'])
-        test_file = output_lines(css_to_gzip)[0]
+        css_to_gzip = web_container.exec_find(
+            ['static', '-name', '*.css', '-size', '-1024c'])
+        test_file = css_to_gzip[0]
 
         response = web_client('/' + test_file,
                               headers={'Accept-Encoding': 'gzip'})
@@ -415,7 +359,7 @@ class TestCeleryWorker(object):
         When the container is running, there should be 3 running processes:
         tini, and the Celery worker master and worker.
         """
-        ps_rows = list_container_processes(worker_only_container)
+        ps_rows = worker_only_container.list_processes()
         ps_tree = build_process_tree(ps_rows)
 
         tini_args = 'tini -- django-entrypoint.sh celery worker'
@@ -428,7 +372,7 @@ class TestCeleryWorker(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', celery_master_args, children=[
                     MatchesPsTree('django', celery_worker_args),
                 ]),
@@ -440,8 +384,9 @@ class TestCeleryWorker(object):
         When the worker container is running, the three default Celery queues
         should have been created in RabbitMQ.
         """
-        rabbitmq_output = amqp_container.exec_run(
-            ['rabbitmqctl', '-q', 'list_queues', '-p', '/mysite'])
+        # FIXME: This should be a method on RabbitMQContainer.
+        rabbitmq_output = amqp_container.exec_rabbitmqctl(
+            'list_queues', ['-p', '/mysite'])
         rabbitmq_lines = output_lines(rabbitmq_output)
         rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
 
@@ -458,7 +403,7 @@ class TestCeleryBeat(object):
         When the container is running, there should be 2 running processes:
         tini, and the Celery beat process.
         """
-        ps_rows = list_container_processes(beat_only_container)
+        ps_rows = beat_only_container.list_processes()
         ps_tree = build_process_tree(ps_rows)
 
         tini_args = 'tini -- django-entrypoint.sh celery beat'
@@ -466,6 +411,6 @@ class TestCeleryBeat(object):
 
         assert_that(
             ps_tree,
-            MatchesPsTree('root', tini_args, pid='1', children=[
+            MatchesPsTree('root', tini_args, pid=1, children=[
                 MatchesPsTree('django', celery_beat_args),
             ]))
