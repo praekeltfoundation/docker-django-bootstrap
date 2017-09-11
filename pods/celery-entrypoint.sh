@@ -19,6 +19,15 @@ if [ "$1" != 'celery' ]; then
 fi
 
 if [ "$1" = 'celery' ]; then
+  # Set the concurrency if this is a worker
+  if [ "$2" = 'worker' ]; then
+    if [ -n "$CELERY_CONCURRENCY" ]; then
+      echo 'DEPRECATED: The CELERY_CONCURRENCY environment variable is deprecated.
+            Please set the Celery worker concurrency in your Django settings file rather.' 1>&2
+    fi
+    set -- "$@" --concurrency "${CELERY_CONCURRENCY:-1}"
+  fi
+
   # Run under the celery user
   set -- su-exec django "$@"
 
