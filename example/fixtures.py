@@ -43,14 +43,14 @@ class DjangoBootstrapContainer(ContainerBase):
 def create_django_bootstrap_container(
         request, name, wait_lines, command=None, single_container=False,
         publish_port=True, other_fixtures=()):
-    # FIXME: there are probably better ways to skip these tests
     pods = request.getfixturevalue('pods')
-    if single_container and pods:
-        pytest.skip()
-    if request.fixturename == 'web_only_container' and pods:
-        pytest.skip()
-    if request.fixturename == 'gunicorn_container' and not pods:
-        pytest.skip()
+    # FIXME: there are probably better ways to skip these tests
+    if pods:
+        if request.fixturename in ['web_only_container', 'single_container']:
+            pytest.skip()
+    else:
+        if request.fixturename == 'gunicorn_container':
+            pytest.skip()
 
     for fix in other_fixtures:
         request.getfixturevalue(fix)
