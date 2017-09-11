@@ -125,6 +125,44 @@ class TestWeb(object):
                 ]),
             ]))
 
+    def test_expected_processes_pod_container(self, gunicorn_container):
+        """
+        When the container is running, there should be 3 running processes:
+        tini and the Gunicorn master and worker.
+        """
+        ps_rows = filter_ldconfig_process(gunicorn_container.list_processes())
+
+        # Sometimes it takes a little while for the processes to settle so try
+        # a few times with a delay inbetween.
+        retries = 3
+        delay = 0.5
+        for _ in range(retries):
+            if len(ps_rows) == 5:
+                break
+            time.sleep(delay)
+            ps_rows = filter_ldconfig_process(
+                gunicorn_container.list_processes())
+
+        ps_tree = build_process_tree(ps_rows)
+
+        tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
+        gunicorn_master_args = (
+            '/usr/local/bin/python /usr/local/bin/gunicorn '
+            'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+            '--bind unix:/var/run/gunicorn/gunicorn.sock')
+        gunicorn_worker_args = (
+            '/usr/local/bin/python /usr/local/bin/gunicorn '
+            'mysite.wsgi:application --pid /var/run/gunicorn/gunicorn.pid '
+            '--bind unix:/var/run/gunicorn/gunicorn.sock')
+
+        assert_that(
+            ps_tree,
+            MatchesPsTree('root', tini_args, pid=1, children=[
+                MatchesPsTree('django', gunicorn_master_args, children=[
+                    MatchesPsTree('django', gunicorn_worker_args),
+                ]),
+            ]))
+
     @pytest.mark.clean_db
     def test_database_tables_created(self, db_container, web_container):
         """
@@ -146,57 +184,6 @@ class TestWeb(object):
                     Equals('text/html; charset=utf-8'))
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
-
-    def test_nginx_access_logs(self, web_container, web_client):
-        """
-        When a request has been made to the container, Nginx logs access logs
-        to stdout
-        """
-        # Wait a little bit so that previous tests' requests have been written
-        # to the log.
-        time.sleep(0.2)
-        before_lines = web_container.stdout_logs()
-
-        # Make a request to see the logs for it
-        web_client('/')
-
-        # Wait a little bit so that our request has been written to the log.
-        time.sleep(0.2)
-        after_lines = web_container.stdout_logs()
-
-        new_lines = after_lines[len(before_lines):]
-        assert_that(len(new_lines), GreaterThan(0))
-
-        # Find the Nginx log line
-        nginx_lines = [l for l in new_lines if re.match(r'^\{ "time": .+', l)]
-        assert_that(nginx_lines, HasLength(1))
-
-        now = datetime.now(timezone.utc)
-        assert_that(json.loads(nginx_lines[0]), MatchesDict({
-            # Assert time is valid and recent
-            'time': After(iso8601.parse_date, MatchesAll(
-                MatchesAny(LessThan(now), Equals(now)),
-                MatchesAny(GreaterThan(now - timedelta(seconds=5)))
-            )),
-
-            'request': Equals('GET / HTTP/1.1'),
-            'status': Equals(404),
-            'body_bytes_sent': GreaterThan(0),
-            'request_time': LessThan(1.0),
-            'http_referer': Equals(''),
-
-            # Assert remote_addr is an IPv4 (roughly)
-            'remote_addr': MatchesRegex(
-                r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'),
-            'http_host': MatchesRegex(r'^127.0.0.1:\d{4,5}$'),
-            'http_user_agent': MatchesRegex(r'^python-requests/'),
-
-            # Not very interesting empty fields
-            'remote_user': Equals(''),
-            'http_via': Equals(''),
-            'http_x_forwarded_proto': Equals(''),
-            'http_x_forwarded_for': Equals(''),
-        }))
 
     def test_static_file(self, web_client):
         """
@@ -351,6 +338,76 @@ class TestWeb(object):
             Not(Contains('Content-Encoding')),
             Not(Contains('Vary')),
         ))
+
+
+class TestNginx(object):
+    def test_expected_processes(self, nginx_only_container):
+        """
+        When the container is running, there should be 2 running processes:
+        the Nginx master and worker processes.
+        """
+        ps_rows = nginx_only_container.list_processes()
+        ps_tree = build_process_tree(ps_rows)
+
+        nginx_master_args = 'nginx: master process nginx -g daemon off;'
+        nginx_worker_args = 'nginx: worker process'
+
+        assert_that(
+            ps_tree,
+            MatchesPsTree('root', nginx_master_args, pid=1, children=[
+                MatchesPsTree('nginx', nginx_worker_args),
+            ]))
+
+    def test_nginx_access_logs(self, nginx_container, web_client):
+        """
+        When a request has been made to the container, Nginx logs access logs
+        to stdout
+        """
+        # Wait a little bit so that previous tests' requests have been written
+        # to the log.
+        time.sleep(0.2)
+        before_lines = nginx_container.stdout_logs()
+
+        # Make a request to see the logs for it
+        web_client('/')
+
+        # Wait a little bit so that our request has been written to the log.
+        time.sleep(0.2)
+        after_lines = nginx_container.stdout_logs()
+
+        new_lines = after_lines[len(before_lines):]
+        assert_that(len(new_lines), GreaterThan(0))
+
+        # Find the Nginx log line
+        nginx_lines = [l for l in new_lines if re.match(r'^\{ "time": .+', l)]
+        assert_that(nginx_lines, HasLength(1))
+
+        now = datetime.now(timezone.utc)
+        assert_that(json.loads(nginx_lines[0]), MatchesDict({
+            # Assert time is valid and recent
+            'time': After(iso8601.parse_date, MatchesAll(
+                MatchesAny(LessThan(now), Equals(now)),
+                MatchesAny(GreaterThan(now - timedelta(seconds=5)))
+            )),
+
+            'request': Equals('GET / HTTP/1.1'),
+            'status': Equals(404),
+            'body_bytes_sent': GreaterThan(0),
+            'request_time': LessThan(1.0),
+            'http_referer': Equals(''),
+
+            # Assert remote_addr is an IPv4 (roughly)
+            'remote_addr': MatchesRegex(
+                r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'),
+            'http_host': MatchesRegex(r'^127.0.0.1:\d{4,5}$'),
+            'http_user_agent': MatchesRegex(r'^python-requests/'),
+
+            # Not very interesting empty fields
+            'remote_user': Equals(''),
+            'http_via': Equals(''),
+            'http_x_forwarded_proto': Equals(''),
+            'http_x_forwarded_for': Equals(''),
+        }))
 
 
 class TestCeleryWorker(object):

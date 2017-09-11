@@ -41,9 +41,32 @@ class DjangoBootstrapContainer(ContainerBase):
         return output_lines(self.inner().exec_run(['find'] + params))
 
 
+class NginxContainer(ContainerBase):
+    def __init__(self, name, image):
+        super().__init__(name, image)
+
+    def create_kwargs(self):
+        return {
+            'ports': {'80/tcp': ('127.0.0.1',)}
+        }
+
+    def list_processes(self):
+        return list_container_processes(self.inner())
+
+    def stdout_logs(self):
+        return output_lines(self.inner().logs(stdout=True, stderr=False))
+
+
 def create_django_bootstrap_container(
         request, name, wait_lines, command=None, single_container=False,
         publish_port=True, other_fixtures=()):
+    # FIXME: there are probably better ways to skip these tests
+    pods = request.getfixturevalue('pods')
+    if single_container and pods:
+        pytest.skip()
+    if request.fixturename == 'web_only_container' and pods:
+        pytest.skip()
+
     for fix in other_fixtures:
         request.getfixturevalue(fix)
     image = request.getfixturevalue('django_bootstrap_image')
@@ -104,6 +127,10 @@ web_only_container = make_app_container(
     'web_only_container', 'web', ['db_container', 'amqp_container'],
     [r'Booting worker'])
 
+gunicorn_container = make_app_container(
+    'gunicorn_container', 'web', ['db_container', 'amqp_container'],
+    [r'Booting worker'], publish_port=False)
+
 worker_only_container = make_app_container(
     'worker_only_container', 'worker', ['amqp_container'],
     [r'celery@\w+ ready'], command=['celery', 'worker'], publish_port=False)
@@ -131,9 +158,33 @@ beat_container = make_multi_container(
 
 
 @pytest.fixture
-def web_client(docker_helper, web_container):
-    port = docker_helper.get_container_host_port(
-        web_container.inner(), '8000/tcp')
+def nginx_only_container(pods, nginx_container):
+    if not pods:
+        pytest.skip()
+
+    return nginx_container
+
+
+@pytest.fixture
+def nginx_container(request, pods, nginx_image, docker_helper):
+    if not pods:
+        return request.getfixturevalue('web_container')
+
+    container = NginxContainer('nginx', nginx_image)
+    container.create_and_start(docker_helper)
+    yield container
+    container.stop_and_remove(docker_helper)
+
+
+@pytest.fixture
+def web_client(docker_helper, nginx_container):
+    # FIXME: please please fix me
+    ports = nginx_container.inner().attrs['NetworkSettings']['Ports']
+    assert len(ports) == 1
+    print(ports)
+    # Pick the first and only port
+    port = next(iter(ports.values()))[0]['HostPort']
+
     with requests.Session() as session:
         def client(path, method='GET', **kwargs):
             return session.request(
@@ -143,7 +194,19 @@ def web_client(docker_helper, web_container):
 
 
 __all__ = [
-    'raw_db_container', 'db_container', 'raw_amqp_container',
-    'amqp_container', 'single_container', 'web_only_container',
-    'worker_only_container', 'beat_only_container', 'web_container',
-    'worker_container', 'beat_container', 'web_client']
+    'amqp_container',
+    'beat_container',
+    'beat_only_container',
+    'db_container',
+    'gunicorn_container',
+    'nginx_container',
+    'nginx_only_container',
+    'raw_amqp_container',
+    'raw_db_container',
+    'single_container',
+    'web_client',
+    'web_container',
+    'web_only_container',
+    'worker_container',
+    'worker_only_container',
+]
