@@ -1,5 +1,4 @@
 import pytest
-import requests
 
 from seaworthy import wait_for_logs_matching
 from seaworthy.containers.base import ContainerBase
@@ -65,6 +64,8 @@ def create_django_bootstrap_container(
     if single_container and pods:
         pytest.skip()
     if request.fixturename == 'web_only_container' and pods:
+        pytest.skip()
+    if request.fixturename == 'gunicorn_container' and not pods:
         pytest.skip()
 
     for fix in other_fixtures:
@@ -148,7 +149,12 @@ def make_multi_container(name, containers):
 
 
 web_container = make_multi_container(
-    'web_container', ['single_container', 'web_only_container'])
+    'web_container',
+    ['single_container', 'web_only_container', 'gunicorn_container'])
+
+nginx_container = make_multi_container(
+    'nginx_container',
+    ['single_container', 'web_only_container', 'nginx_only_container'])
 
 worker_container = make_multi_container(
     'worker_container', ['single_container', 'worker_only_container'])
@@ -158,39 +164,14 @@ beat_container = make_multi_container(
 
 
 @pytest.fixture
-def nginx_only_container(pods, nginx_container):
+def nginx_only_container(request, pods, nginx_image, docker_helper):
     if not pods:
         pytest.skip()
-
-    return nginx_container
-
-
-@pytest.fixture
-def nginx_container(request, pods, nginx_image, docker_helper):
-    if not pods:
-        return request.getfixturevalue('web_container')
 
     container = NginxContainer('nginx', nginx_image)
     container.create_and_start(docker_helper)
     yield container
     container.stop_and_remove(docker_helper)
-
-
-@pytest.fixture
-def web_client(docker_helper, nginx_container):
-    # FIXME: please please fix me
-    ports = nginx_container.inner().attrs['NetworkSettings']['Ports']
-    assert len(ports) == 1
-    print(ports)
-    # Pick the first and only port
-    port = next(iter(ports.values()))[0]['HostPort']
-
-    with requests.Session() as session:
-        def client(path, method='GET', **kwargs):
-            return session.request(
-                method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
-
-        yield client
 
 
 __all__ = [
@@ -204,7 +185,6 @@ __all__ = [
     'raw_amqp_container',
     'raw_db_container',
     'single_container',
-    'web_client',
     'web_container',
     'web_only_container',
     'worker_container',
