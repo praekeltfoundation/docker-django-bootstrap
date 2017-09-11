@@ -1,3 +1,5 @@
+import time
+
 import pytest
 
 from seaworthy import wait_for_logs_matching
@@ -194,6 +196,10 @@ class NginxContainer(ContainerBase):
                 },
             }
         }
+
+    def wait_for_start(self, docker_helper, container):
+        # No real way to know when Nginx is ready. Wait a short moment.
+        time.sleep(0.5)
 
     def list_processes(self):
         return list_container_processes(self.inner())
