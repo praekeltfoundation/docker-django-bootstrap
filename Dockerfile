@@ -15,14 +15,15 @@ RUN set -ex; \
 RUN apt-get-install.sh libpq5
 
 # Install a modern Nginx and configure
-ENV NGINX_VERSION 1.12.1-1~jessie
-RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
-    && echo 'deb http://nginx.org/packages/debian/ jessie nginx' > /etc/apt/sources.list.d/nginx.list \
-    && apt-get-install.sh "nginx=$NGINX_VERSION" \
-    && rm /etc/nginx/conf.d/default.conf \
-# Add nginx user to django group so that Nginx can read/write to gunicorn socket
-    && adduser nginx django
-COPY nginx/ /etc/nginx/
+ENV OPENRESTY_VERSION 1.11.2.5-1~jessie1
+RUN set -ex; \
+    apt-key adv --keyserver ha.pool.sks-keyservers.net --recv-keys E52218E7087897DC6DEA6D6D97DB7443D5EDEB74; \
+    echo 'deb http://openresty.org/package/debian jessie openresty' > /etc/apt/sources.list.d/openresty.list; \
+    \
+    apt-get-install.sh "openresty=$OPENRESTY_VERSION"; \
+    adduser www-data django
+ENV PATH /usr/local/openresty/bin:$PATH
+COPY nginx/ /usr/local/openresty/nginx/conf/
 
 # Install gunicorn
 COPY requirements.txt /requirements.txt

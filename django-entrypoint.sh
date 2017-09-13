@@ -34,7 +34,7 @@ if not User.objects.filter(username='admin').exists():
     echo "Created superuser with username 'admin' and password '$SUPERUSER_PASSWORD'"
   fi
 
-  nginx -g 'daemon off;' &
+  openresty -g 'daemon off;' &
 
   # Celery
   ensure_celery_app() {
