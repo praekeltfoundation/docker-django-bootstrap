@@ -13,12 +13,18 @@ RUN set -ex; \
 
 # Install a modern Nginx and configure
 ENV NGINX_VERSION 1.12.1-1~jessie
-RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
-    && echo 'deb http://nginx.org/packages/debian/ jessie nginx' > /etc/apt/sources.list.d/nginx.list \
-    && apt-get-install.sh "nginx=$NGINX_VERSION" \
-    && rm /etc/nginx/conf.d/default.conf \
+ENV NGINX_GPG_KEY 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
+RUN set -ex; \
+    apt-get-install.sh wget; \
+    wget -O- https://nginx.org/keys/nginx_signing.key | apt-key add -; \
+    apt-key adv --fingerprint "$NGINX_GPG_KEY"; \
+    echo 'deb http://nginx.org/packages/debian/ jessie nginx' > /etc/apt/sources.list.d/nginx.list; \
+    apt-get-purge.sh wget; \
+    \
+    apt-get-install.sh "nginx=$NGINX_VERSION"; \
+    rm /etc/nginx/conf.d/default.conf; \
 # Add nginx user to django group so that Nginx can read/write to gunicorn socket
-    && adduser nginx django
+    adduser nginx django
 COPY nginx/ /etc/nginx/
 
 # Install gunicorn

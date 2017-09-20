@@ -24,7 +24,7 @@ before_script:
   # Fetch existing image to use as cache
   - docker pull "$image"
 script:
-  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" .
+  - travis_retry docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" .
   - docker build -t "mysite:$VARIANT" --build-arg VARIANT="$VARIANT" example
   - pytest -v example/test.py --django-bootstrap-image="mysite:$VARIANT"
 
