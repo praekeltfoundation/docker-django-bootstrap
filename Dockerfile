@@ -11,9 +11,6 @@ RUN set -ex; \
     mkdir /var/run/gunicorn /var/run/celery; \
     chown django:django /var/run/gunicorn /var/run/celery
 
-# Install libpq for psycopg2 for PostgreSQL support
-RUN apt-get-install.sh libpq5
-
 # Install a modern Nginx and configure
 ENV NGINX_VERSION 1.12.1-1~jessie
 RUN apt-key adv --keyserver hkp://pgp.mit.edu:80 --recv-keys 573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62 \
