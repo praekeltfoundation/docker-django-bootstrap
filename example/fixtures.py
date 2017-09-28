@@ -1,7 +1,6 @@
 import pytest
 import requests
 
-from seaworthy import wait_for_logs_matching
 from seaworthy.containers.base import ContainerBase
 from seaworthy.containers.provided import (
     PostgreSQLContainer, RabbitMQContainer)
@@ -19,23 +18,13 @@ raw_amqp_container, amqp_container = clean_container_fixtures(
 
 
 class DjangoBootstrapContainer(ContainerBase):
-    def __init__(self, name, image, wait_patterns, kwargs):
-        super().__init__(name, image, wait_patterns)
-        self._kwargs = kwargs
-
-    def create_kwargs(self):
-        return self._kwargs
-
     def wait_for_start(self, docker_helper, container):
         if self.wait_matchers:
             for matcher in self.wait_matchers:
-                wait_for_logs_matching(container, matcher)
+                self.wait_for_logs_matching(matcher)
 
     def list_processes(self):
         return list_container_processes(self.inner())
-
-    def stdout_logs(self):
-        return output_lines(self.inner().logs(stdout=True, stderr=False))
 
     def exec_find(self, params):
         return output_lines(self.inner().exec_run(['find'] + params))
@@ -132,8 +121,7 @@ beat_container = make_multi_container(
 
 @pytest.fixture
 def web_client(docker_helper, web_container):
-    port = docker_helper.get_container_host_port(
-        web_container.inner(), '8000/tcp')
+    port = web_container.get_host_port('8000/tcp')
     with requests.Session() as session:
         def client(path, method='GET', **kwargs):
             return session.request(
