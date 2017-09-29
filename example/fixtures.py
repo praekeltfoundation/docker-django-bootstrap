@@ -18,11 +18,6 @@ raw_amqp_container, amqp_container = clean_container_fixtures(
 
 
 class DjangoBootstrapContainer(ContainerBase):
-    def wait_for_start(self, docker_helper, container):
-        if self.wait_matchers:
-            for matcher in self.wait_matchers:
-                self.wait_for_logs_matching(matcher)
-
     def list_processes(self):
         return list_container_processes(self.inner())
 
