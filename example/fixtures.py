@@ -5,8 +5,9 @@ from seaworthy.containers.base import ContainerBase
 from seaworthy.containers.provided import (
     PostgreSQLContainer, RabbitMQContainer)
 from seaworthy.ps import list_container_processes
-from seaworthy.pytest.fixtures import clean_container_fixtures
-from seaworthy.utils import output_lines
+from seaworthy.pytest.fixtures import (
+    clean_container_fixtures, wrap_container_fixture)
+from seaworthy.logs import output_lines
 
 
 DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
@@ -55,9 +56,7 @@ class DjangoBootstrapContainer(ContainerBase):
         @pytest.fixture(name=fixture_name)
         def fixture(request, docker_helper):
             container = cls.for_fixture(request, name, *args, **kw)
-            container.create_and_start(docker_helper)
-            yield container
-            container.stop_and_remove(docker_helper)
+            yield from wrap_container_fixture(container, docker_helper)
         return fixture
 
 
