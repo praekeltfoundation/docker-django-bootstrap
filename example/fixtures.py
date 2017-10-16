@@ -1,3 +1,5 @@
+import os
+
 import pytest
 import requests
 
@@ -12,16 +14,22 @@ from seaworthy.logs import output_lines
 
 DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
 
+DEFAULT_WAIT_TIMEOUT = int(os.environ.get('DEFAULT_WAIT_TIMEOUT', '30'))
+
 
 raw_db_container, db_container = clean_container_fixtures(
-    PostgreSQLContainer(), 'db_container', scope='module')
+    PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT), 'db_container',
+    scope='module')
 
 
 raw_amqp_container, amqp_container = clean_container_fixtures(
-    RabbitMQContainer(vhost='/mysite'), 'amqp_container', scope='module')
+    RabbitMQContainer(vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT),
+    'amqp_container', scope='module')
 
 
 class DjangoBootstrapContainer(ContainerBase):
+    WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
+
     def list_processes(self):
         return list_container_processes(self.inner())
 
@@ -31,7 +39,7 @@ class DjangoBootstrapContainer(ContainerBase):
     @classmethod
     def for_fixture(
             cls, request, name, wait_lines, command=None, needs_db=True,
-            env_extra={}, publish_port=True):
+            env_extra={}, publish_port=True, wait_timeout=None):
         amqp_container = request.getfixturevalue('amqp_container')
         env = {
             'SECRET_KEY': 'secret',
@@ -49,7 +57,7 @@ class DjangoBootstrapContainer(ContainerBase):
         if publish_port:
             kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-        return cls(name, DDB_IMAGE, wait_lines, kwargs)
+        return cls(name, DDB_IMAGE, wait_lines, wait_timeout, kwargs)
 
     @classmethod
     def make_fixture(cls, fixture_name, name, *args, **kw):
