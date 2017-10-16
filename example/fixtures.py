@@ -38,17 +38,16 @@ class DjangoBootstrapContainer(ContainerBase):
 
     @classmethod
     def for_fixture(
-            cls, request, name, wait_lines, command=None, needs_db=True,
-            env_extra={}, publish_port=True, wait_timeout=None):
+            cls, request, name, wait_lines, command=None, env_extra={},
+            publish_port=True, wait_timeout=None):
         amqp_container = request.getfixturevalue('amqp_container')
+        db_container = request.getfixturevalue('db_container')
         env = {
             'SECRET_KEY': 'secret',
             'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
             'CELERY_BROKER_URL': amqp_container.broker_url(),
+            'DATABASE_URL': db_container.database_url(),
         }
-        if needs_db:
-            db_container = request.getfixturevalue('db_container')
-            env['DATABASE_URL'] = db_container.database_url()
         env.update(env_extra)
         kwargs = {
             'command': command,
