@@ -140,7 +140,7 @@ class TestWeb(object):
         When we get the /admin/ path, we should receive some HTML for the
         Django admin interface.
         """
-        response = web_client('/admin/')
+        response = web_client.get('/admin/')
 
         assert_that(response.headers['Content-Type'],
                     Equals('text/html; charset=utf-8'))
@@ -158,7 +158,7 @@ class TestWeb(object):
         before_lines = output_lines(web_container.get_logs(stderr=False))
 
         # Make a request to see the logs for it
-        web_client('/')
+        web_client.get('/')
 
         # Wait a little bit so that our request has been written to the log.
         time.sleep(0.2)
@@ -203,7 +203,7 @@ class TestWeb(object):
         When a static file is requested, Nginx should serve the file with the
         correct mime type.
         """
-        response = web_client('/static/admin/css/base.css')
+        response = web_client.get('/static/admin/css/base.css')
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.text, Contains('DJANGO Admin styles'))
@@ -219,7 +219,7 @@ class TestWeb(object):
              '.*\.[a-f0-9]{12}\.svg$'])
         test_file = hashed_svg[0]
 
-        response = web_client('/' + test_file)
+        response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('image/svg+xml'))
         assert_that(response.headers['Cache-Control'],
@@ -235,7 +235,7 @@ class TestWeb(object):
             ['static/CACHE/js', '-name', '*.js'])
         test_file = compressed_js[0]
 
-        response = web_client('/' + test_file)
+        response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'],
                     Equals('application/javascript'))
@@ -252,7 +252,7 @@ class TestWeb(object):
             ['static/CACHE/css', '-name', '*.css'])
         test_file = compressed_js[0]
 
-        response = web_client('/' + test_file)
+        response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Cache-Control'],
@@ -268,8 +268,8 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
-        response = web_client('/' + test_file,
-                              headers={'Accept-Encoding': 'gzip'})
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
@@ -285,8 +285,8 @@ class TestWeb(object):
             ['static', '-name', '*.woff', '-size', '+1024c'])
         test_file = woff_to_not_gzip[0]
 
-        response = web_client('/' + test_file,
-                              headers={'Accept-Encoding': 'gzip'})
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'],
                     Equals('application/font-woff'))
@@ -306,8 +306,8 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
-        response = web_client('/' + test_file,
-                              headers={'Accept-Encoding': ''})
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': ''})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers, Not(Contains('Content-Encoding')))
@@ -325,7 +325,7 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
-        response = web_client(
+        response = web_client.get(
             '/' + test_file,
             headers={'Accept-Encoding': 'gzip', 'Via': 'Internet.org'})
 
@@ -343,8 +343,8 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '-1024c'])
         test_file = css_to_gzip[0]
 
-        response = web_client('/' + test_file,
-                              headers={'Accept-Encoding': 'gzip'})
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers, MatchesAll(
@@ -384,13 +384,9 @@ class TestCeleryWorker(object):
         When the worker container is running, the three default Celery queues
         should have been created in RabbitMQ.
         """
-        # FIXME: This should be a method on RabbitMQContainer.
-        rabbitmq_output = amqp_container.exec_rabbitmqctl(
-            'list_queues', ['-p', '/mysite'])
-        rabbitmq_lines = output_lines(rabbitmq_output)
-        rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
+        queue_data = amqp_container.list_queues()
 
-        assert_that(rabbitmq_data, MatchesSetwise(*map(MatchesListwise, (
+        assert_that(queue_data, MatchesSetwise(*map(MatchesListwise, (
             [Equals('celery'), Equals('0')],
             [MatchesRegex(r'^celeryev\..+'), Equals('0')],
             [MatchesRegex(r'^celery@.+\.celery\.pidbox$'), Equals('0')],

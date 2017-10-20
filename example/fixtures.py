@@ -1,14 +1,13 @@
 import os
 
 import pytest
-import requests
 
+from seaworthy.client import ContainerHttpClient
 from seaworthy.containers.base import ContainerBase
 from seaworthy.containers.provided import (
     PostgreSQLContainer, RabbitMQContainer)
 from seaworthy.ps import list_container_processes
-from seaworthy.pytest.fixtures import (
-    clean_container_fixtures, wrap_container_fixture)
+from seaworthy.pytest.fixtures import clean_container_fixtures
 from seaworthy.logs import output_lines
 
 
@@ -40,6 +39,7 @@ class DjangoBootstrapContainer(ContainerBase):
     def for_fixture(
             cls, request, name, wait_lines, command=None, env_extra={},
             publish_port=True, wait_timeout=None):
+        docker_helper = request.getfixturevalue('docker_helper')
         amqp_container = request.getfixturevalue('amqp_container')
         db_container = request.getfixturevalue('db_container')
         env = {
@@ -56,14 +56,16 @@ class DjangoBootstrapContainer(ContainerBase):
         if publish_port:
             kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-        return cls(name, DDB_IMAGE, wait_lines, wait_timeout, kwargs)
+        return cls(
+            name, DDB_IMAGE, wait_lines, wait_timeout, kwargs,
+            docker_helper=docker_helper)
 
     @classmethod
     def make_fixture(cls, fixture_name, name, *args, **kw):
         @pytest.fixture(name=fixture_name)
-        def fixture(request, docker_helper):
-            container = cls.for_fixture(request, name, *args, **kw)
-            yield from wrap_container_fixture(container, docker_helper)
+        def fixture(request):
+            with cls.for_fixture(request, name, *args, **kw) as container:
+                yield container
         return fixture
 
 
@@ -105,13 +107,8 @@ beat_container = make_multi_container(
 
 
 @pytest.fixture
-def web_client(docker_helper, web_container):
-    port = web_container.get_host_port('8000/tcp')
-    with requests.Session() as session:
-        def client(path, method='GET', **kwargs):
-            return session.request(
-                method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
-
+def web_client(web_container):
+    with ContainerHttpClient.for_container(web_container) as client:
         yield client
 
 

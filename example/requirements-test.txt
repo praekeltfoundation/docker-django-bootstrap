@@ -1,4 +1,4 @@
-git+https://github.com/praekeltfoundation/seaworthy.git@6505122004786dc9164415e3eb1d862cd8bc7135#egg=seaworthy
+git+https://github.com/praekeltfoundation/seaworthy.git@901cbb8a4dfb39585fdf82b504128967d9f3cca1#egg=seaworthy
 iso8601
 pytest >= 3.1
 pytest-catchlog
