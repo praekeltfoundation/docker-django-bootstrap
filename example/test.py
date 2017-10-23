@@ -135,11 +135,12 @@ class TestWeb(object):
             r[1] for r in db_container.list_tables() if r[0] == 'public']
         assert_that(len(public_tables), GreaterThan(0))
 
-    def test_admin_site_live(self, web_client):
+    def test_admin_site_live(self, web_container):
         """
         When we get the /admin/ path, we should receive some HTML for the
         Django admin interface.
         """
+        web_client = web_container.http_client()
         response = web_client.get('/admin/')
 
         assert_that(response.headers['Content-Type'],
@@ -147,7 +148,7 @@ class TestWeb(object):
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
 
-    def test_nginx_access_logs(self, web_container, web_client):
+    def test_nginx_access_logs(self, web_container):
         """
         When a request has been made to the container, Nginx logs access logs
         to stdout
@@ -158,6 +159,7 @@ class TestWeb(object):
         before_lines = output_lines(web_container.get_logs(stderr=False))
 
         # Make a request to see the logs for it
+        web_client = web_container.http_client()
         web_client.get('/')
 
         # Wait a little bit so that our request has been written to the log.
@@ -198,17 +200,18 @@ class TestWeb(object):
             'http_x_forwarded_for': Equals(''),
         }))
 
-    def test_static_file(self, web_client):
+    def test_static_file(self, web_container):
         """
         When a static file is requested, Nginx should serve the file with the
         correct mime type.
         """
+        web_client = web_container.http_client()
         response = web_client.get('/static/admin/css/base.css')
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.text, Contains('DJANGO Admin styles'))
 
-    def test_manifest_static_storage_file(self, web_container, web_client):
+    def test_manifest_static_storage_file(self, web_container):
         """
         When a static file that was processed by Django's
         ManifestStaticFilesStorage system is requested, that file should be
@@ -219,13 +222,14 @@ class TestWeb(object):
              '.*\.[a-f0-9]{12}\.svg$'])
         test_file = hashed_svg[0]
 
+        web_client = web_container.http_client()
         response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('image/svg+xml'))
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
-    def test_django_compressor_js_file(self, web_container, web_client):
+    def test_django_compressor_js_file(self, web_container):
         """
         When a static JavaScript file that was processed by django_compressor
         is requested, that file should be served with a far-future
@@ -235,6 +239,7 @@ class TestWeb(object):
             ['static/CACHE/js', '-name', '*.js'])
         test_file = compressed_js[0]
 
+        web_client = web_container.http_client()
         response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'],
@@ -242,7 +247,7 @@ class TestWeb(object):
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
-    def test_django_compressor_css_file(self, web_container, web_client):
+    def test_django_compressor_css_file(self, web_container):
         """
         When a static CSS file that was processed by django_compressor is
         requested, that file should be served with a far-future 'Cache-Control'
@@ -252,13 +257,14 @@ class TestWeb(object):
             ['static/CACHE/css', '-name', '*.css'])
         test_file = compressed_js[0]
 
+        web_client = web_container.http_client()
         response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Cache-Control'],
                     Equals('max-age=315360000, public, immutable'))
 
-    def test_gzip_css_compressed(self, web_container, web_client):
+    def test_gzip_css_compressed(self, web_container):
         """
         When a CSS file larger than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
@@ -268,6 +274,7 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
+        web_client = web_container.http_client()
         response = web_client.get(
             '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
@@ -275,7 +282,7 @@ class TestWeb(object):
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
-    def test_gzip_woff_not_compressed(self, web_container, web_client):
+    def test_gzip_woff_not_compressed(self, web_container):
         """
         When a .woff file larger than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
@@ -285,6 +292,7 @@ class TestWeb(object):
             ['static', '-name', '*.woff', '-size', '+1024c'])
         test_file = woff_to_not_gzip[0]
 
+        web_client = web_container.http_client()
         response = web_client.get(
             '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
@@ -295,7 +303,7 @@ class TestWeb(object):
             Not(Contains('Vary')),
         ))
 
-    def test_gzip_accept_encoding_respected(self, web_container, web_client):
+    def test_gzip_accept_encoding_respected(self, web_container):
         """
         When a CSS file larger than 1024 bytes is requested and the
         'Accept-Encoding' header does not list gzip as an accepted encoding,
@@ -306,6 +314,7 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
+        web_client = web_container.http_client()
         response = web_client.get(
             '/' + test_file, headers={'Accept-Encoding': ''})
 
@@ -315,7 +324,7 @@ class TestWeb(object):
         # file will be served with a different encoding.
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
-    def test_gzip_via_compressed(self, web_container, web_client):
+    def test_gzip_via_compressed(self, web_container):
         """
         When a CSS file larger than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding and the
@@ -325,6 +334,7 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
+        web_client = web_container.http_client()
         response = web_client.get(
             '/' + test_file,
             headers={'Accept-Encoding': 'gzip', 'Via': 'Internet.org'})
@@ -333,7 +343,7 @@ class TestWeb(object):
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
         assert_that(response.headers['Vary'], Equals('Accept-Encoding'))
 
-    def test_gzip_small_file_not_compressed(self, web_container, web_client):
+    def test_gzip_small_file_not_compressed(self, web_container):
         """
         When a CSS file smaller than 1024 bytes is requested and the
         'Accept-Encoding' header lists gzip as an accepted encoding, the file
@@ -343,6 +353,7 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '-1024c'])
         test_file = css_to_gzip[0]
 
+        web_client = web_container.http_client()
         response = web_client.get(
             '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 

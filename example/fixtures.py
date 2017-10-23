@@ -106,14 +106,8 @@ beat_container = make_multi_container(
     'beat_container', ['single_container', 'beat_only_container'])
 
 
-@pytest.fixture
-def web_client(web_container):
-    with ContainerHttpClient.for_container(web_container) as client:
-        yield client
-
-
 __all__ = [
     'raw_db_container', 'db_container', 'raw_amqp_container',
     'amqp_container', 'single_container', 'web_only_container',
     'worker_only_container', 'beat_only_container', 'web_container',
-    'worker_container', 'beat_container', 'web_client']
+    'worker_container', 'beat_container']
