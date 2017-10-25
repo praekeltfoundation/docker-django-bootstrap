@@ -2,7 +2,6 @@ import os
 
 import pytest
 
-from seaworthy.client import ContainerHttpClient
 from seaworthy.containers.base import ContainerBase
 from seaworthy.containers.provided import (
     PostgreSQLContainer, RabbitMQContainer)
