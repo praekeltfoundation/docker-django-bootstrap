@@ -3,8 +3,8 @@ import os
 import pytest
 
 from seaworthy.containers.base import ContainerBase
-from seaworthy.containers.provided import (
-    PostgreSQLContainer, RabbitMQContainer)
+from seaworthy.containers.postgresql import PostgreSQLContainer
+from seaworthy.containers.rabbitmq import RabbitMQContainer
 from seaworthy.ps import list_container_processes
 from seaworthy.pytest.fixtures import clean_container_fixtures
 from seaworthy.logs import output_lines
