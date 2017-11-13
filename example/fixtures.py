@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from seaworthy.containers.base import ContainerBase
+from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
 from seaworthy.containers.rabbitmq import RabbitMQContainer
 from seaworthy.ps import list_container_processes
@@ -25,7 +25,7 @@ raw_amqp_container, amqp_container = clean_container_fixtures(
     'amqp_container', scope='module')
 
 
-class DjangoBootstrapContainer(ContainerBase):
+class DjangoBootstrapContainer(ContainerDefinition):
     WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
 
     def list_processes(self):
