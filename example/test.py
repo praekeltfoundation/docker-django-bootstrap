@@ -11,7 +11,7 @@ import pytest
 import requests
 from seaworthy.ps import build_process_tree
 from seaworthy.testtools import MatchesPsTree
-from seaworthy.utils import output_lines
+from seaworthy.logs import output_lines
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
@@ -197,21 +197,73 @@ class TestWeb(object):
         When we get the /admin/ path, we should receive some HTML for the
         Django admin interface.
         """
-        with requests_client(nginx_container) as client:
-            response = client('/admin/')
+        web_client = nginx_container.http_client()
+        response = web_client.get('/admin/')
 
         assert_that(response.headers['Content-Type'],
                     Equals('text/html; charset=utf-8'))
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
 
+    def test_nginx_access_logs(self, nginx_container):
+        """
+        When a request has been made to the container, Nginx logs access logs
+        to stdout
+        """
+        # Wait a little bit so that previous tests' requests have been written
+        # to the log.
+        time.sleep(0.2)
+        before_lines = output_lines(nginx_container.get_logs(stderr=False))
+
+        # Make a request to see the logs for it
+        web_client = nginx_container.http_client()
+        web_client.get('/')
+
+        # Wait a little bit so that our request has been written to the log.
+        time.sleep(0.2)
+        after_lines = output_lines(nginx_container.get_logs(stderr=False))
+
+        new_lines = after_lines[len(before_lines):]
+        assert_that(len(new_lines), GreaterThan(0))
+
+        # Find the Nginx log line
+        nginx_lines = [l for l in new_lines if re.match(r'^\{ "time": .+', l)]
+        assert_that(nginx_lines, HasLength(1))
+
+        now = datetime.now(timezone.utc)
+        assert_that(json.loads(nginx_lines[0]), MatchesDict({
+            # Assert time is valid and recent
+            'time': After(iso8601.parse_date, MatchesAll(
+                MatchesAny(LessThan(now), Equals(now)),
+                MatchesAny(GreaterThan(now - timedelta(seconds=5)))
+            )),
+
+            'request': Equals('GET / HTTP/1.1'),
+            'status': Equals(404),
+            'body_bytes_sent': GreaterThan(0),
+            'request_time': LessThan(1.0),
+            'http_referer': Equals(''),
+
+            # Assert remote_addr is an IPv4 (roughly)
+            'remote_addr': MatchesRegex(
+                r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'),
+            'http_host': MatchesRegex(r'^127.0.0.1:\d{4,5}$'),
+            'http_user_agent': MatchesRegex(r'^python-requests/'),
+
+            # Not very interesting empty fields
+            'remote_user': Equals(''),
+            'http_via': Equals(''),
+            'http_x_forwarded_proto': Equals(''),
+            'http_x_forwarded_for': Equals(''),
+        }))
+
     def test_static_file(self, nginx_container, web_container):
         """
         When a static file is requested, Nginx should serve the file with the
         correct mime type.
         """
-        with requests_client(nginx_container) as client:
-            response = client('/static/admin/css/base.css')
+        web_client = nginx_container.http_client()
+        response = web_client.get('/static/admin/css/base.css')
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.text, Contains('DJANGO Admin styles'))
@@ -228,8 +280,8 @@ class TestWeb(object):
              '.*\.[a-f0-9]{12}\.svg$'])
         test_file = hashed_svg[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file)
+        web_client = nginx_container.http_client()
+        response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('image/svg+xml'))
         assert_that(response.headers['Cache-Control'],
@@ -245,8 +297,8 @@ class TestWeb(object):
             ['static/CACHE/js', '-name', '*.js'])
         test_file = compressed_js[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file)
+        web_client = nginx_container.http_client()
+        response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'],
                     Equals('application/javascript'))
@@ -263,8 +315,8 @@ class TestWeb(object):
             ['static/CACHE/css', '-name', '*.css'])
         test_file = compressed_js[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file)
+        web_client = nginx_container.http_client()
+        response = web_client.get('/' + test_file)
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Cache-Control'],
@@ -280,9 +332,9 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file,
-                              headers={'Accept-Encoding': 'gzip'})
+        web_client = nginx_container.http_client()
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
@@ -298,9 +350,9 @@ class TestWeb(object):
             ['static', '-name', '*.woff', '-size', '+1024c'])
         test_file = woff_to_not_gzip[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file,
-                              headers={'Accept-Encoding': 'gzip'})
+        web_client = nginx_container.http_client()
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'],
                     Equals('application/font-woff'))
@@ -321,9 +373,9 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file,
-                              headers={'Accept-Encoding': ''})
+        web_client = nginx_container.http_client()
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': ''})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers, Not(Contains('Content-Encoding')))
@@ -341,10 +393,10 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '+1024c'])
         test_file = css_to_gzip[0]
 
-        with requests_client(nginx_container) as client:
-            response = client(
-                '/' + test_file,
-                headers={'Accept-Encoding': 'gzip', 'Via': 'Internet.org'})
+        web_client = nginx_container.http_client()
+        response = web_client.get(
+            '/' + test_file,
+            headers={'Accept-Encoding': 'gzip', 'Via': 'Internet.org'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers['Content-Encoding'], Equals('gzip'))
@@ -361,9 +413,9 @@ class TestWeb(object):
             ['static', '-name', '*.css', '-size', '-1024c'])
         test_file = css_to_gzip[0]
 
-        with requests_client(nginx_container) as client:
-            response = client('/' + test_file,
-                              headers={'Accept-Encoding': 'gzip'})
+        web_client = nginx_container.http_client()
+        response = web_client.get(
+            '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'], Equals('text/css'))
         assert_that(response.headers, MatchesAll(
@@ -474,13 +526,9 @@ class TestCeleryWorker(object):
         When the worker container is running, the three default Celery queues
         should have been created in RabbitMQ.
         """
-        # FIXME: This should be a method on RabbitMQContainer.
-        rabbitmq_output = amqp_container.exec_rabbitmqctl(
-            'list_queues', ['-p', '/mysite'])
-        rabbitmq_lines = output_lines(rabbitmq_output)
-        rabbitmq_data = [line.split(None, 1) for line in rabbitmq_lines]
+        queue_data = amqp_container.list_queues()
 
-        assert_that(rabbitmq_data, MatchesSetwise(*map(MatchesListwise, (
+        assert_that(queue_data, MatchesSetwise(*map(MatchesListwise, (
             [Equals('celery'), Equals('0')],
             [MatchesRegex(r'^celeryev\..+'), Equals('0')],
             [MatchesRegex(r'^celery@.+\.celery\.pidbox$'), Equals('0')],

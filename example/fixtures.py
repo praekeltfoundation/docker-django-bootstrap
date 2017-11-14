@@ -1,140 +1,113 @@
+import os
 import time
 
 import pytest
 
-from seaworthy import wait_for_logs_matching
-from seaworthy.containers.base import ContainerBase
-from seaworthy.containers.provided import (
-    PostgreSQLContainer, RabbitMQContainer)
+from seaworthy.definitions import ContainerDefinition
+from seaworthy.containers.postgresql import PostgreSQLContainer
+from seaworthy.containers.rabbitmq import RabbitMQContainer
 from seaworthy.ps import list_container_processes
 from seaworthy.pytest.fixtures import clean_container_fixtures
-from seaworthy.utils import output_lines
+from seaworthy.logs import output_lines
+
+
+DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
+
+DEFAULT_WAIT_TIMEOUT = int(os.environ.get('DEFAULT_WAIT_TIMEOUT', '30'))
 
 
 raw_db_container, db_container = clean_container_fixtures(
-    PostgreSQLContainer(), 'db_container', scope='module')
+    PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT), 'db_container',
+    scope='module')
 
 
 raw_amqp_container, amqp_container = clean_container_fixtures(
-    RabbitMQContainer(vhost='/mysite'), 'amqp_container', scope='module')
+    RabbitMQContainer(vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT),
+    'amqp_container', scope='module')
 
 
-class DjangoBootstrapContainer(ContainerBase):
-    def __init__(self, name, image, wait_patterns, kwargs):
-        super().__init__(name, image, wait_patterns)
-        self._kwargs = kwargs
-
-    def create_kwargs(self):
-        return self._kwargs
-
-    def wait_for_start(self, docker_helper, container):
-        if self.wait_matchers:
-            for matcher in self.wait_matchers:
-                wait_for_logs_matching(container, matcher)
+class DjangoBootstrapContainer(ContainerDefinition):
+    WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
 
     def list_processes(self):
         return list_container_processes(self.inner())
 
-    def stdout_logs(self):
-        return output_lines(self.inner().logs(stdout=True, stderr=False))
-
     def exec_find(self, params):
         return output_lines(self.inner().exec_run(['find'] + params))
 
-
-def create_django_bootstrap_container(
-        request, name, wait_lines, command=None, single_container=False,
-        publish_port=True, other_fixtures=()):
-    pods = request.getfixturevalue('pods')
-    # FIXME: there are probably better ways to skip these tests
-    if pods:
-        if request.fixturename in ['web_only_container', 'single_container']:
-            pytest.skip()
-    else:
-        if request.fixturename == 'gunicorn_container':
-            pytest.skip()
-
-    for fix in other_fixtures:
-        request.getfixturevalue(fix)
-    image = request.getfixturevalue('django_bootstrap_image')
-
-    # FIXME: Get these URLs in a better way.
-    database_url = PostgreSQLContainer().database_url()
-    celery_broker_url = RabbitMQContainer(vhost='/mysite').broker_url()
-    kwargs = {
-        'command': command,
-        'environment': {
+    @classmethod
+    def for_fixture(
+            cls, request, name, wait_lines, command=None, env_extra={},
+            publish_port=True, wait_timeout=None):
+        pods = request.getfixturevalue('pods')
+        # FIXME: there are probably better ways to skip these tests
+        if pods:
+            if request.fixturename in [
+                    'web_only_container', 'single_container']:
+                pytest.skip()
+        else:
+            if request.fixturename == 'gunicorn_container':
+                pytest.skip()
+        docker_helper = request.getfixturevalue('docker_helper')
+        amqp_container = request.getfixturevalue('amqp_container')
+        db_container = request.getfixturevalue('db_container')
+        env = {
             'SECRET_KEY': 'secret',
             'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'DATABASE_URL': database_url,
-            'CELERY_BROKER_URL': celery_broker_url,
-        },
-    }
-    if single_container:
-        kwargs['environment'].update({
-            'CELERY_WORKER': '1',
-            'CELERY_BEAT': '1',
-        })
-    if publish_port:
-        kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
-    if pods:
-        static_volume = request.getfixturevalue('static_volume')
-        media_volume = request.getfixturevalue('media_volume')
-        gunicorn_volume = request.getfixturevalue('gunicorn_volume')
-        kwargs['volumes'] = {
-            static_volume.id: {'bind': '/app/static', 'mode': 'rw'},
-            media_volume.id: {'bind': '/app/media', 'mode': 'rw'},
-            gunicorn_volume.id: {'bind': '/var/run/gunicorn', 'mode': 'rw'},
+            'CELERY_BROKER_URL': amqp_container.broker_url(),
+            'DATABASE_URL': db_container.database_url(),
         }
-
-    return DjangoBootstrapContainer(name, image, wait_lines, kwargs)
-
-
-def container_factory_fixture(factory, name, kwargs, scope='function'):
-    @pytest.fixture(name=name, scope=scope)
-    def raw_fixture(request, docker_helper):
-        container = factory(request, **kwargs)
-        container.create_and_start(docker_helper)
-        yield container
-        container.stop_and_remove(docker_helper)
-
-    return raw_fixture
-
-
-def make_app_container(
-        name, container_name, other_fixtures, wait_lines, command=None,
-        single_container=False, publish_port=True):
-    return container_factory_fixture(
-        create_django_bootstrap_container, name, kwargs={
-            'name': container_name,
-            'wait_lines': wait_lines,
+        env.update(env_extra)
+        kwargs = {
             'command': command,
-            'single_container': single_container,
-            'publish_port': publish_port,
-            'other_fixtures': other_fixtures,
-        })
+            'environment': env,
+        }
+        if publish_port:
+            kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
+        if pods:
+            static_volume = request.getfixturevalue('static_volume')
+            media_volume = request.getfixturevalue('media_volume')
+            gunicorn_volume = request.getfixturevalue('gunicorn_volume')
+            kwargs['volumes'] = {
+                static_volume.id: {'bind': '/app/static', 'mode': 'rw'},
+                media_volume.id: {'bind': '/app/media', 'mode': 'rw'},
+                gunicorn_volume.id: {
+                    'bind': '/var/run/gunicorn', 'mode': 'rw'},
+            }
+
+        return cls(
+            name, DDB_IMAGE, wait_lines, wait_timeout, kwargs,
+            helper=docker_helper.containers)
+
+    @classmethod
+    def make_fixture(cls, fixture_name, name, *args, **kw):
+        @pytest.fixture(name=fixture_name)
+        def fixture(request):
+            with cls.for_fixture(request, name, *args, **kw) as container:
+                yield container
+        return fixture
 
 
-single_container = make_app_container(
-    'single_container', 'web', ['db_container', 'amqp_container'],
+single_container = DjangoBootstrapContainer.make_fixture(
+    'single_container', 'web',
     [r'Booting worker', r'celery@\w+ ready', r'beat: Starting\.\.\.'],
-    single_container=True)
+    env_extra={'CELERY_WORKER': '1', 'CELERY_BEAT': '1'})
 
-web_only_container = make_app_container(
-    'web_only_container', 'web', ['db_container', 'amqp_container'],
-    [r'Booting worker'])
 
-gunicorn_container = make_app_container(
-    'gunicorn_container', 'web', ['db_container', 'amqp_container'],
-    [r'Booting worker'], publish_port=False)
+web_only_container = DjangoBootstrapContainer.make_fixture(
+    'web_only_container',  'web', [r'Booting worker'])
 
-worker_only_container = make_app_container(
-    'worker_only_container', 'worker', ['amqp_container'],
-    [r'celery@\w+ ready'], command=['celery', 'worker'], publish_port=False)
 
-beat_only_container = make_app_container(
-    'beat_only_container', 'beat', ['amqp_container'],
-    [r'beat: Starting\.\.\.'], command=['celery', 'beat'], publish_port=False)
+worker_only_container = DjangoBootstrapContainer.make_fixture(
+    'worker_only_container', 'worker', [r'celery@\w+ ready'],
+    command=['celery', 'worker'], publish_port=False)
+
+gunicorn_container = DjangoBootstrapContainer.make_fixture(
+    'gunicorn_container', 'web', [r'Booting worker'], publish_port=False)
+
+beat_only_container = DjangoBootstrapContainer.make_fixture(
+    'beat_only_container', 'beat', [r'beat: Starting\.\.\.'],
+    command=['celery', 'beat'], publish_port=False)
 
 
 def make_multi_container(name, containers):
@@ -170,7 +143,7 @@ media_volume = volume_fixture('media', 'media_volume')
 gunicorn_volume = volume_fixture('gunicorn', 'gunicorn_volume')
 
 
-class NginxContainer(ContainerBase):
+class NginxContainer(ContainerDefinition):
     def __init__(
             self, name, image, static_volume, media_volume, gunicorn_volume):
         super().__init__(name, image)

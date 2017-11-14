@@ -1,5 +1,6 @@
-ARG VARIANT=py3
+ARG VARIANT=py3-stretch
 FROM praekeltfoundation/django-bootstrap:$VARIANT
+RUN command -v ps > /dev/null || apt-get-install.sh procps
 COPY . /app
 RUN pip install -e .
 ENV DJANGO_SETTINGS_MODULE mysite.docker_settings

@@ -32,10 +32,5 @@ def pods(request):
 
 
 @pytest.fixture(scope='session')
-def django_bootstrap_image(request):
-    return request.config.getoption('--django-bootstrap-image')
-
-
-@pytest.fixture(scope='session')
 def nginx_image(request):
     return request.config.getoption('--db-nginx-image')
