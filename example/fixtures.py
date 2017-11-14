@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from seaworthy.definitions import ContainerDefinition
+from seaworthy.definitions import ContainerDefinition, VolumeDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
 from seaworthy.containers.rabbitmq import RabbitMQContainer
 from seaworthy.ps import list_container_processes
@@ -12,6 +12,7 @@ from seaworthy.logs import output_lines
 
 
 DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
+NGINX_IMAGE = pytest.config.getoption('--db-nginx-image')
 
 DEFAULT_WAIT_TIMEOUT = int(os.environ.get('DEFAULT_WAIT_TIMEOUT', '30'))
 
@@ -69,9 +70,9 @@ class DjangoBootstrapContainer(ContainerDefinition):
             media_volume = request.getfixturevalue('media_volume')
             gunicorn_volume = request.getfixturevalue('gunicorn_volume')
             kwargs['volumes'] = {
-                static_volume.id: {'bind': '/app/static', 'mode': 'rw'},
-                media_volume.id: {'bind': '/app/media', 'mode': 'rw'},
-                gunicorn_volume.id: {
+                static_volume.inner(): {'bind': '/app/static', 'mode': 'rw'},
+                media_volume.inner(): {'bind': '/app/media', 'mode': 'rw'},
+                gunicorn_volume.inner(): {
                     'bind': '/var/run/gunicorn', 'mode': 'rw'},
             }
 
@@ -131,54 +132,74 @@ beat_container = make_multi_container(
 def volume_fixture(volume, name, scope='function'):
     @pytest.fixture(name=name, scope=scope)
     def fixture(docker_helper):
-        # FIXME: DockerHelper volumes API
-        volume = docker_helper._client.volumes.create(name, driver='local')
-        yield volume
-        volume.remove()
+        volume.set_helper(docker_helper)
+        with volume:
+            yield volume
     return fixture
 
 
-static_volume = volume_fixture('static', 'static_volume')
-media_volume = volume_fixture('media', 'media_volume')
-gunicorn_volume = volume_fixture('gunicorn', 'gunicorn_volume')
+static_volume = volume_fixture(VolumeDefinition('static'), 'static_volume')
+media_volume = volume_fixture(VolumeDefinition('media'), 'media_volume')
+gunicorn_volume = volume_fixture(
+    VolumeDefinition('gunicorn'), 'gunicorn_volume')
 
 
 class NginxContainer(ContainerDefinition):
-    def __init__(
-            self, name, image, static_volume, media_volume, gunicorn_volume):
-        super().__init__(name, image)
+    def __init__(self, name, image, static_volume, media_volume,
+                 gunicorn_volume, **kwargs):
+        super().__init__(name, image, **kwargs)
         self._static_volume = static_volume
         self._media_volume = media_volume
         self._gunicorn_volume = gunicorn_volume
 
-    def create_kwargs(self):
+    def base_kwargs(self):
         return {
             'ports': {'80/tcp': ('127.0.0.1',)},
             'volumes': {
-                self._static_volume.id: {
+                self._static_volume.inner(): {
                     'bind': '/usr/share/nginx/static',
                     'mode': 'ro',
                 },
-                self._media_volume.id: {
+                self._media_volume.inner(): {
                     'bind': '/usr/share/nginx/media',
                     'mode': 'ro',
                 },
-                self._gunicorn_volume.id: {
+                self._gunicorn_volume.inner(): {
                     'bind': '/var/run/gunicorn',
                     'mode': 'rw',
                 },
             }
         }
 
-    def wait_for_start(self, docker_helper, container):
+    def wait_for_start(self):
         # No real way to know when Nginx is ready. Wait a short moment.
         time.sleep(0.5)
 
     def list_processes(self):
         return list_container_processes(self.inner())
 
-    def stdout_logs(self):
-        return output_lines(self.inner().logs(stdout=True, stderr=False))
+    @classmethod
+    def for_fixture(cls, request, name):
+        if not request.getfixturevalue('pods'):
+            pytest.skip()
+
+        docker_helper = request.getfixturevalue('docker_helper')
+
+        static_volume = request.getfixturevalue('static_volume')
+        media_volume = request.getfixturevalue('media_volume')
+        gunicorn_volume = request.getfixturevalue('gunicorn_volume')
+
+        return cls(
+            name, NGINX_IMAGE, static_volume, media_volume, gunicorn_volume,
+            helper=docker_helper)
+
+    @classmethod
+    def make_fixture(cls, fixture_name, name, *args, **kw):
+        @pytest.fixture(name=fixture_name)
+        def fixture(request):
+            with cls.for_fixture(request, name, *args, **kw) as container:
+                yield container
+        return fixture
 
 
 @pytest.fixture
@@ -190,20 +211,8 @@ def nginx_container(request, pods, web_container):
     return request.getfixturevalue('nginx_only_container')
 
 
-@pytest.fixture
-def nginx_only_container(request, pods, nginx_image, docker_helper):
-    if not pods:
-        pytest.skip()
-
-    static_volume = request.getfixturevalue('static_volume')
-    media_volume = request.getfixturevalue('media_volume')
-    gunicorn_volume = request.getfixturevalue('gunicorn_volume')
-
-    container = NginxContainer(
-        'nginx', nginx_image, static_volume, media_volume, gunicorn_volume)
-    container.create_and_start(docker_helper)
-    yield container
-    container.stop_and_remove(docker_helper)
+nginx_only_container = NginxContainer.make_fixture(
+    'nginx_only_container', 'nginx')
 
 
 __all__ = [

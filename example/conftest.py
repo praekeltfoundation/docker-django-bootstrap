@@ -29,8 +29,3 @@ def pytest_report_header(config):
 @pytest.fixture(scope='session')
 def pods(request):
     return request.config.getoption('--pods')
-
-
-@pytest.fixture(scope='session')
-def nginx_image(request):
-    return request.config.getoption('--db-nginx-image')
