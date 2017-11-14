@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=2.7
+ARG PYTHON_VERSION=2.7-jessie
 FROM praekeltfoundation/python-base:${PYTHON_VERSION}
 
 # Create the user and working directories first as they shouldn't change often.
