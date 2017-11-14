@@ -6,25 +6,16 @@ python: '3.6'
 
 env:
   global:
-<<<<<<< HEAD
-    - IMAGE_NAME=praekeltfoundation/django-bootstrap
-    - REGISTRY_USER=praekeltorgdeploy
-    - secure: "UK7h5cBSPlsL1bPJx+S7ArYKHIUjEWfsITw8M/ObTLaIQHMq2uV3J/D7K5GFkqJFX9sUGmFZBkCu1J9JwpieO1Ew79B2/g4i0aDDmhIuE+IOo5tQ6jinAmP1NEVrCvk1LUTdXwk46VbUCGNxYpv44ge1zwhRrtNpMxaIqXsSYLOXjA7p7A/IghDRYDsRIjz6TfXNKcw+qWxzUTSUjLqgcZqezvI3c9VRRgD94vKh9KpLryVtSPxGjUQTKD6cfu6Yvbz6TzVGp6QCEM9ysRdRJx0ecsP39XBj8VVnqI34ux+4sqiwdqM7SQTlaKFJK+o6dMAX5ZEkA9jQw2kWDX0Pg60zHX+vbH1vycPVaQ6ln9J68pNZx6AMFbJpDkTacrmStH9uIuH6+pN4j4gNsT4TkwtFJDcRuGI0gShqBgQVVHhGuCECfj6RZQ7K35NsQVHXQy47AkwGODu3xUwAuiMOeQVR2rEYCBnJfx+qLY5hIsPzR4MhidLPSZa5T520uhp+35pVAk95DYYEL+6N2C3wIOmtEl6gZNC1P0IgCDuTOU/u5+TCaS5C7M3aWk26SL+n3JnFeCAgLr+OYntHwW9PIen70OG1bokGdxQZ00DvF9veyQz+6IGVEG1Cm5MZv6Cp9bqgpGYMRhKBEAJyKrT+slt6ah10+eIJbT7p4HIgKBM="
-  matrix:
-    - VERSION=py2 VARIANT=     PYTHON_VERSION=2.7 TAG_LATEST=1
-    - VERSION=py3 VARIANT=     PYTHON_VERSION=3.6 TAG_LATEST=
-    - VERSION=py2 VARIANT=pods PYTHON_VERSION=2.7 TAG_LATEST=
-    - VERSION=py3 VARIANT=pods PYTHON_VERSION=3.6 TAG_LATEST=
-=======
     - IMAGE_USER=praekeltfoundation
     - REGISTRY_USER=praekeltorgdeploy
     - secure: "UK7h5cBSPlsL1bPJx+S7ArYKHIUjEWfsITw8M/ObTLaIQHMq2uV3J/D7K5GFkqJFX9sUGmFZBkCu1J9JwpieO1Ew79B2/g4i0aDDmhIuE+IOo5tQ6jinAmP1NEVrCvk1LUTdXwk46VbUCGNxYpv44ge1zwhRrtNpMxaIqXsSYLOXjA7p7A/IghDRYDsRIjz6TfXNKcw+qWxzUTSUjLqgcZqezvI3c9VRRgD94vKh9KpLryVtSPxGjUQTKD6cfu6Yvbz6TzVGp6QCEM9ysRdRJx0ecsP39XBj8VVnqI34ux+4sqiwdqM7SQTlaKFJK+o6dMAX5ZEkA9jQw2kWDX0Pg60zHX+vbH1vycPVaQ6ln9J68pNZx6AMFbJpDkTacrmStH9uIuH6+pN4j4gNsT4TkwtFJDcRuGI0gShqBgQVVHhGuCECfj6RZQ7K35NsQVHXQy47AkwGODu3xUwAuiMOeQVR2rEYCBnJfx+qLY5hIsPzR4MhidLPSZa5T520uhp+35pVAk95DYYEL+6N2C3wIOmtEl6gZNC1P0IgCDuTOU/u5+TCaS5C7M3aWk26SL+n3JnFeCAgLr+OYntHwW9PIen70OG1bokGdxQZ00DvF9veyQz+6IGVEG1Cm5MZv6Cp9bqgpGYMRhKBEAJyKrT+slt6ah10+eIJbT7p4HIgKBM="
   matrix:
-    - PYTHON_VERSION=2.7 VARIANT=jessie  PODS= VERSION_LATEST=1 TAG_LATEST=1
-    - PYTHON_VERSION=2.7 VARIANT=stretch PODS= VERSION_LATEST=1 TAG_LATEST=
-    - PYTHON_VERSION=3.6 VARIANT=jessie  PODS= VERSION_LATEST=  TAG_LATEST=1
-    - PYTHON_VERSION=3.6 VARIANT=stretch PODS= VERSION_LATEST=  TAG_LATEST=
->>>>>>> seaworthy
+    - PYTHON_VERSION=2.7 VARIANT=jessie  PODS=  VERSION_LATEST=1 TAG_LATEST=1
+    - PYTHON_VERSION=2.7 VARIANT=stretch PODS=  VERSION_LATEST=1 TAG_LATEST=
+    - PYTHON_VERSION=2.7 VARIANT=stretch PODS=1 VERSION_LATEST=1 TAG_LATEST=
+    - PYTHON_VERSION=3.6 VARIANT=jessie  PODS=  VERSION_LATEST=  TAG_LATEST=1
+    - PYTHON_VERSION=3.6 VARIANT=stretch PODS=  VERSION_LATEST=  TAG_LATEST=
+    - PYTHON_VERSION=3.6 VARIANT=stretch PODS=1 VERSION_LATEST=  TAG_LATEST=
 
 # Update Docker Engine and Compose
 before_install:
@@ -34,26 +25,16 @@ install:
   - (cd example; pip install -r requirements-test.txt)
 
 before_script:
-<<<<<<< HEAD
-  - tag="${VERSION}${VARIANT:+-$VARIANT}"
-  - image="$IMAGE_NAME:$tag"
-  # Fetch existing image to use as cache
-  - docker pull "$image" || true
-script:
-  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION" --tag "$image" "${VARIANT:-.}"
-  - if [ "$VARIANT" = 'pods' ]; then docker build --tag "$IMAGE_NAME:nginx" pods/nginx; fi
-  - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" example
-  - pytest -v example/test.py --django-bootstrap-image="mysite:$tag" ${VARIANT:+--pods --db-nginx-image="$IMAGE_NAME:nginx"}
-=======
-  - tag="py$PYTHON_VERSION-$VARIANT"
+  - tag="py$PYTHON_VERSION-$VARIANT${PODS:+-pods}"
   - image="$IMAGE_USER/django-bootstrap:$tag"
+  - context="${PODS:+pods}"; context="${context:-.}"
   # Fetch existing image to use as cache
   - docker pull "$image" || true
 script:
-  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION-$VARIANT" --tag "$image" .
+  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION-$VARIANT" --tag "$image" "$context"
+  - if [ -n "$PODS" ]; then docker build --tag "$IMAGE_NAME:nginx" pods/nginx; fi
   - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" example
-  - pytest -v example/test.py --django-bootstrap-image="mysite:$tag"
->>>>>>> seaworthy
+  - pytest -v example/test.py --django-bootstrap-image="mysite:$tag" ${PODS:+--pods --db-nginx-image="$IMAGE_NAME:nginx"}
 
 after_script:
   - docker images
