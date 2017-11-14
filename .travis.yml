@@ -35,13 +35,14 @@ before_script:
   - name="$IMAGE_USER/django-bootstrap"
   - image="$name:$tag"
   - context="${PODS:+pods}"; context="${context:-.}"
+  - echo "Building image '$image' from context ${context}..."
   # Fetch existing image to use as cache
   - docker pull "$image" || true
 script:
   - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION-$VARIANT" --tag "$image" "$context"
   - if [ -n "$PODS" ]; then docker build --tag "$name:nginx" pods/nginx; fi
   - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" example
-  - pytest -v example/test.py --django-bootstrap-image="mysite:$tag" ${PODS:+--pods --db-nginx-image="$IMAGE_NAME:nginx"}
+  - pytest -v example/test.py --django-bootstrap-image="mysite:$tag" ${PODS:+--pods --db-nginx-image="$name:nginx"}
 
 after_script:
   - docker images
