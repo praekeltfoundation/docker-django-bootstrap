@@ -57,7 +57,7 @@ class DjangoBootstrapContainer(ContainerDefinition):
 
         return cls(
             name, DDB_IMAGE, wait_lines, wait_timeout, kwargs,
-            helper=docker_helper.containers)
+            helper=docker_helper)
 
     @classmethod
     def make_fixture(cls, fixture_name, name, *args, **kw):
