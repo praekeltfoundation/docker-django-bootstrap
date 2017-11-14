@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import contextlib
 import json
 import logging
 import re
@@ -8,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 
 import iso8601
 import pytest
-import requests
 from seaworthy.ps import build_process_tree
 from seaworthy.testtools import MatchesPsTree
 from seaworthy.logs import output_lines
@@ -37,23 +35,6 @@ def filter_ldconfig_process(ps_rows):
     """
     return [row for row in ps_rows
             if not (row.ruser == 'django' and 'ldconfig' in row.args)]
-
-
-@contextlib.contextmanager
-def requests_client(container):
-    # FIXME: please please fix me
-    ports = container.inner().attrs['NetworkSettings']['Ports']
-    assert len(ports) == 1
-    print(ports)
-    # Pick the first and only port
-    port = next(iter(ports.values()))[0]['HostPort']
-
-    with requests.Session() as session:
-        def client(path, method='GET', **kwargs):
-            return session.request(
-                method, 'http://127.0.0.1:{}{}'.format(port, path), **kwargs)
-
-        yield client
 
 
 class TestWeb(object):
@@ -450,15 +431,17 @@ class TestNginx(object):
         # Wait a little bit so that previous tests' requests have been written
         # to the log.
         time.sleep(0.2)
-        before_lines = nginx_container.stdout_logs()
+        before_lines = output_lines(
+            nginx_container.get_logs(stdout=True, stderr=False))
 
         # Make a request to see the logs for it
-        with requests_client(nginx_container) as client:
-            client('/')
+        client = nginx_container.http_client()
+        client.get('/')
 
         # Wait a little bit so that our request has been written to the log.
         time.sleep(0.2)
-        after_lines = nginx_container.stdout_logs()
+        after_lines = output_lines(
+            nginx_container.get_logs(stdout=True, stderr=False))
 
         new_lines = after_lines[len(before_lines):]
         assert_that(len(new_lines), GreaterThan(0))
