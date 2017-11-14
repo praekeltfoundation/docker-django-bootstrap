@@ -431,8 +431,7 @@ class TestNginx(object):
         # Wait a little bit so that previous tests' requests have been written
         # to the log.
         time.sleep(0.2)
-        before_lines = output_lines(
-            nginx_container.get_logs(stdout=True, stderr=False))
+        before_lines = output_lines(nginx_container.get_logs(stderr=False))
 
         # Make a request to see the logs for it
         client = nginx_container.http_client()
@@ -440,8 +439,7 @@ class TestNginx(object):
 
         # Wait a little bit so that our request has been written to the log.
         time.sleep(0.2)
-        after_lines = output_lines(
-            nginx_container.get_logs(stdout=True, stderr=False))
+        after_lines = output_lines(nginx_container.get_logs(stderr=False))
 
         new_lines = after_lines[len(before_lines):]
         assert_that(len(new_lines), GreaterThan(0))
