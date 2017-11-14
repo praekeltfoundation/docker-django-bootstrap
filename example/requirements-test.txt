@@ -2,5 +2,4 @@ git+https://github.com/praekeltfoundation/seaworthy.git@c7a0aea7493450178fea8f93
 iso8601
 pytest >= 3.1
 pytest-catchlog
-requests
 testtools
