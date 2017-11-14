@@ -4,6 +4,12 @@ services:
 language: python
 python: '3.6'
 
+# Only build develop. PRs still get built. If/when versioning is added, more
+# branches could need to be built.
+branches:
+  only:
+    - develop
+
 env:
   global:
     - IMAGE_USER=praekeltfoundation
