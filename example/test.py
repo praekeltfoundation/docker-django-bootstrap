@@ -189,22 +189,6 @@ class TestWeb(object):
         count = int(psql_output.strip())
         assert_that(count, GreaterThan(0))
 
-    @pytest.mark.clean_db
-    def test_database_tables_not_created(self, db_container, web_container):
-        """
-        When the web container is running but with the `SKIP_MIGRATIONS`
-        environment variable set, migrations should not have run and there
-        should be no tables in the database.
-        """
-        psql_output = db_container.exec_run(
-            ['psql', '-qtA', '--dbname', 'mysite', '-c',
-             ('SELECT COUNT(*) FROM information_schema.tables WHERE '
-              "table_schema='public';")],
-            user='postgres').decode('utf-8')
-
-        count = int(psql_output.strip())
-        assert_that(count, Equals(0))
-
     def test_admin_site_live(self, web_client):
         """
         When we get the /admin/ path, we should receive some HTML for the
