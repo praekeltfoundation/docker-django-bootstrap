@@ -1,6 +1,5 @@
--e docker-helper/
+seaworthy >= 0.1.1
 iso8601
 pytest >= 3.1
 pytest-catchlog
-requests
 testtools
