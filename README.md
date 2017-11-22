@@ -16,7 +16,7 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 #### Step 1: Get your Django project in shape
 There are a few ways that your Django project needs to be set up in order to be compatible with this Docker image.
 
-**setup.py**
+**setup.py**  
 Your project must have a [`setup.py`](https://packaging.python.org/distributing/#setup-py). All dependencies need to be listed in the [`install_requires`](https://packaging.python.org/distributing/#install-requires).
 
 Your dependencies should include at least:
@@ -28,12 +28,12 @@ Django *isn't* installed in this image as different projects may use different v
 
 Gunicorn is the only Python package installed in this image. It is kept up-to-date and tested here so you should not be pinning the `gunicorn` package in your application. Gunicorn is considered a deployment detail and your Django project should not rely on its use.
 
-**Static files**
+**Static files**  
 Your project's [static files](https://docs.djangoproject.com/en/1.10/howto/static-files/) must be set up as follows in your Django settings:
 * `STATIC_URL = '/static/'`
 * `STATIC_ROOT` = `'static'` (relative) or `'/app/static'` (absolute)
 
-**Media files**
+**Media files**  
 If your project makes use of user-uploaded media files, it must be set up as follows:
 * `MEDIA_URL = '/media/'`
 * `MEDIA_ROOT` = `'media'` (relative) or `'/app/media'` (absolute)
