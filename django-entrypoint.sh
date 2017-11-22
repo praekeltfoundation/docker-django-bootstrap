@@ -24,7 +24,7 @@ if [ "$1" = 'gunicorn' ]; then
   # Ultimately, the user shouldn't really be using a local DB and it's difficult
   # to offer support for all the cases in which a local DB might be created --
   # but here we do the minimum.
-  if [ ! -n "$SKIP_MIGRATIONS" ]; then
+  if [ -z "$SKIP_MIGRATIONS" ]; then
     su-exec django django-admin migrate --noinput
   fi
 
