@@ -6,7 +6,6 @@ from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
 from seaworthy.containers.rabbitmq import RabbitMQContainer
 from seaworthy.ps import list_container_processes
-from seaworthy.pytest.fixtures import clean_container_fixtures
 from seaworthy.logs import output_lines
 
 
@@ -14,14 +13,14 @@ DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
 
 DEFAULT_WAIT_TIMEOUT = int(os.environ.get('DEFAULT_WAIT_TIMEOUT', '30'))
 
+_db_def = PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT)
+raw_db_container, db_container = _db_def.pytest_clean_fixtures(
+    'db_container', scope='module')
 
-raw_db_container, db_container = clean_container_fixtures(
-    PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT), 'db_container',
-    scope='module')
 
-
-raw_amqp_container, amqp_container = clean_container_fixtures(
-    RabbitMQContainer(vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT),
+_amqp_def = RabbitMQContainer(
+    vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT)
+raw_amqp_container, amqp_container = _amqp_def.pytest_clean_fixtures(
     'amqp_container', scope='module')
 
 
@@ -36,16 +35,13 @@ class DjangoBootstrapContainer(ContainerDefinition):
 
     @classmethod
     def for_fixture(
-            cls, request, name, wait_lines, command=None, env_extra={},
+            cls, name, wait_lines, command=None, env_extra={},
             publish_port=True, wait_timeout=None):
-        docker_helper = request.getfixturevalue('docker_helper')
-        amqp_container = request.getfixturevalue('amqp_container')
-        db_container = request.getfixturevalue('db_container')
         env = {
             'SECRET_KEY': 'secret',
             'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'CELERY_BROKER_URL': amqp_container.broker_url(),
-            'DATABASE_URL': db_container.database_url(),
+            'CELERY_BROKER_URL': _amqp_def.broker_url(),
+            'DATABASE_URL': _db_def.database_url(),
         }
         env.update(env_extra)
         kwargs = {
@@ -55,17 +51,12 @@ class DjangoBootstrapContainer(ContainerDefinition):
         if publish_port:
             kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-        return cls(
-            name, DDB_IMAGE, wait_lines, wait_timeout, kwargs,
-            helper=docker_helper)
+        return cls(name, DDB_IMAGE, wait_lines, wait_timeout, kwargs)
 
     @classmethod
     def make_fixture(cls, fixture_name, name, *args, **kw):
-        @pytest.fixture(name=fixture_name)
-        def fixture(request):
-            with cls.for_fixture(request, name, *args, **kw) as container:
-                yield container
-        return fixture
+        return cls.for_fixture(name, *args, **kw).pytest_fixture(
+            fixture_name, dependencies=('db_container', 'amqp_container'))
 
 
 single_container = DjangoBootstrapContainer.make_fixture(
