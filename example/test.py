@@ -136,14 +136,20 @@ class TestWeb(object):
         assert_that(len(public_tables), GreaterThan(0))
 
     @pytest.mark.clean_db
-    def test_database_tables_not_created(self, db_container, web_container):
+    def test_database_tables_not_created(
+            self, docker_helper, db_container, amqp_container):
         """
         When the web container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
         """
-        public_tables = [
-            r[1] for r in db_container.list_tables() if r[0] == 'public']
-        assert_that(len(public_tables), Equals(0))
+        from fixtures import DjangoBootstrapContainer
+        web_container = DjangoBootstrapContainer.for_fixture(
+            'web', [r'Booting worker'], env_extra={'SKIP_MIGRATIONS': '1'})
+
+        with web_container.setup(helper=docker_helper):
+            public_tables = [
+                r[1] for r in db_container.list_tables() if r[0] == 'public']
+            assert_that(len(public_tables), Equals(0))
 
     def test_admin_site_live(self, web_container):
         """
