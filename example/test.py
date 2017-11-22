@@ -135,6 +135,16 @@ class TestWeb(object):
             r[1] for r in db_container.list_tables() if r[0] == 'public']
         assert_that(len(public_tables), GreaterThan(0))
 
+    @pytest.mark.clean_db
+    def test_database_tables_not_created(self, db_container, web_container):
+        """
+        When the web container is running with the `SKIP_MIGRATIONS`
+        environment variable set, there should be no tables in the database.
+        """
+        public_tables = [
+            r[1] for r in db_container.list_tables() if r[0] == 'public']
+        assert_that(len(public_tables), Equals(0))
+
     def test_admin_site_live(self, web_container):
         """
         When we get the /admin/ path, we should receive some HTML for the
