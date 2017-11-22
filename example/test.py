@@ -142,6 +142,8 @@ class TestWeb(object):
         When the web container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
         """
+        # NOTE: for some reason it's not discovering this
+        #       DjangoBootstrapContainer imported with * above
         from fixtures import DjangoBootstrapContainer
         web_container = DjangoBootstrapContainer.for_fixture(
             'web', [r'Booting worker'], env_extra={'SKIP_MIGRATIONS': '1'})
