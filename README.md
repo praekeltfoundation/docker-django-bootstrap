@@ -16,7 +16,7 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 #### Step 1: Get your Django project in shape
 There are a few ways that your Django project needs to be set up in order to be compatible with this Docker image.
 
-**setup.py**  
+**setup.py**
 Your project must have a [`setup.py`](https://packaging.python.org/distributing/#setup-py). All dependencies need to be listed in the [`install_requires`](https://packaging.python.org/distributing/#install-requires).
 
 Your dependencies should include at least:
@@ -28,12 +28,12 @@ Django *isn't* installed in this image as different projects may use different v
 
 Gunicorn is the only Python package installed in this image. It is kept up-to-date and tested here so you should not be pinning the `gunicorn` package in your application. Gunicorn is considered a deployment detail and your Django project should not rely on its use.
 
-**Static files**  
+**Static files**
 Your project's [static files](https://docs.djangoproject.com/en/1.10/howto/static-files/) must be set up as follows in your Django settings:
 * `STATIC_URL = '/static/'`
 * `STATIC_ROOT` = `'static'` (relative) or `'/app/static'` (absolute)
 
-**Media files**  
+**Media files**
 If your project makes use of user-uploaded media files, it must be set up as follows:
 * `MEDIA_URL = '/media/'`
 * `MEDIA_ROOT` = `'media'` (relative) or `'/app/media'` (absolute)
@@ -75,6 +75,8 @@ Let's go through these lines one-by-one:
 By default, the [`django-entrypoint.sh`](django-entrypoint.sh) script is run when the container is started. This script runs a once-off `django-admin migrate` to update the database schemas and then launches `nginx` and `gunicorn` to run the application.
 
 The script also allows you to create a Django super user account if needed. Setting the `SUPERUSER_PASSWORD` environment variable will result in a Django superuser account being made with the `admin` username. This will only happen if no `admin` user exists.
+
+By default the script will run the migrations when starting up. This may not be desirable in all situations. If you want to run migrations separately using `django-admin` then setting the `SKIP_MIGRATIONS` environment variable will result in them not being run.
 
 #### Step 3: Add a `.dockerignore` file (if copying in the project source)
 If you are copying the full source of your project into your Docker image (i.e. doing `COPY . /app`), then it is important to add a `.dockerignore` file.

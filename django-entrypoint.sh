@@ -24,7 +24,9 @@ if [ "$1" = 'gunicorn' ]; then
   # Ultimately, the user shouldn't really be using a local DB and it's difficult
   # to offer support for all the cases in which a local DB might be created --
   # but here we do the minimum.
-  su-exec django django-admin migrate --noinput
+  if [ ! -n "$SKIP_MIGRATIONS" ]; then
+    su-exec django django-admin migrate --noinput
+  fi
 
   if [ -n "$SUPERUSER_PASSWORD" ]; then
     echo "from django.contrib.auth.models import User
