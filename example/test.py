@@ -125,7 +125,7 @@ class TestWeb(object):
                 ]),
             ]))
 
-    @pytest.mark.clean_db
+    @pytest.mark.clean_db_container
     def test_database_tables_created(self, db_container, web_container):
         """
         When the web container is running, a migration should have completed
@@ -135,7 +135,7 @@ class TestWeb(object):
             r[1] for r in db_container.list_tables() if r[0] == 'public']
         assert_that(len(public_tables), GreaterThan(0))
 
-    @pytest.mark.clean_db
+    @pytest.mark.clean_db_container
     def test_database_tables_not_created(
             self, docker_helper, db_container, amqp_container):
         """
