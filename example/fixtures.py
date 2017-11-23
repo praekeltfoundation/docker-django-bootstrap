@@ -13,15 +13,11 @@ DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
 
 DEFAULT_WAIT_TIMEOUT = int(os.environ.get('DEFAULT_WAIT_TIMEOUT', '30'))
 
-_db_def = PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT)
-raw_db_container, db_container = _db_def.pytest_clean_fixtures(
-    'db_container', scope='module')
+db_container = PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT)
 
 
-_amqp_def = RabbitMQContainer(
+amqp_container = RabbitMQContainer(
     vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT)
-raw_amqp_container, amqp_container = _amqp_def.pytest_clean_fixtures(
-    'amqp_container', scope='module')
 
 
 class DjangoBootstrapContainer(ContainerDefinition):
@@ -40,8 +36,8 @@ class DjangoBootstrapContainer(ContainerDefinition):
         env = {
             'SECRET_KEY': 'secret',
             'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'CELERY_BROKER_URL': _amqp_def.broker_url(),
-            'DATABASE_URL': _db_def.database_url(),
+            'CELERY_BROKER_URL': amqp_container.broker_url(),
+            'DATABASE_URL': db_container.database_url(),
         }
         env.update(env_extra)
         kwargs = {
@@ -53,51 +49,42 @@ class DjangoBootstrapContainer(ContainerDefinition):
 
         return cls(name, DDB_IMAGE, wait_lines, wait_timeout, kwargs)
 
+    def pytest_fixture(self, name):
+        return super().pytest_fixture(
+            name, dependencies=('db_container', 'amqp_container'))
+
     @classmethod
     def make_fixture(cls, fixture_name, name, *args, **kw):
-        return cls.for_fixture(name, *args, **kw).pytest_fixture(
-            fixture_name, dependencies=('db_container', 'amqp_container'))
+        return cls.for_fixture(name, *args, **kw).pytest_fixture(fixture_name)
 
 
-single_container = DjangoBootstrapContainer.make_fixture(
-    'single_container', 'web',
-    [r'Booting worker', r'celery@\w+ ready', r'beat: Starting\.\.\.'],
+single_container = DjangoBootstrapContainer.for_fixture(
+    'web', [r'Booting worker', r'celery@\w+ ready', r'beat: Starting\.\.\.'],
     env_extra={'CELERY_WORKER': '1', 'CELERY_BEAT': '1'})
 
 
-web_only_container = DjangoBootstrapContainer.make_fixture(
-    'web_only_container',  'web', [r'Booting worker'])
+web_container = DjangoBootstrapContainer.for_fixture(
+    'web', [r'Booting worker'])
 
 
-worker_only_container = DjangoBootstrapContainer.make_fixture(
-    'worker_only_container', 'worker', [r'celery@\w+ ready'],
+worker_container = DjangoBootstrapContainer.for_fixture(
+    'worker', [r'celery@\w+ ready'],
     command=['celery', 'worker'], publish_port=False)
 
 
-beat_only_container = DjangoBootstrapContainer.make_fixture(
-    'beat_only_container', 'beat', [r'beat: Starting\.\.\.'],
+beat_container = DjangoBootstrapContainer.for_fixture(
+    'beat', [r'beat: Starting\.\.\.'],
     command=['celery', 'beat'], publish_port=False)
 
 
-def make_multi_container(name, containers):
-    @pytest.fixture(name=name, params=containers)
+def make_multi_fixture(name, fixtures):
+    @pytest.fixture(name=name, params=fixtures)
     def containers(request):
         yield request.getfixturevalue(request.param)
     return containers
 
 
-web_container = make_multi_container(
-    'web_container', ['single_container', 'web_only_container'])
-
-worker_container = make_multi_container(
-    'worker_container', ['single_container', 'worker_only_container'])
-
-beat_container = make_multi_container(
-    'beat_container', ['single_container', 'beat_only_container'])
-
-
-__all__ = [
-    'raw_db_container', 'db_container', 'raw_amqp_container',
-    'amqp_container', 'single_container', 'web_only_container',
-    'worker_only_container', 'beat_only_container', 'web_container',
-    'worker_container', 'beat_container']
+def make_combined_fixture(base):
+    return make_multi_fixture(
+        '{}_container'.format(base),
+        ['single_container', '{}_only_container'.format(base)])

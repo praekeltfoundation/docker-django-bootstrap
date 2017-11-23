@@ -16,7 +16,13 @@ from testtools.matchers import (
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
-from fixtures import *  # noqa: We import these so pytest can find them.
+from fixtures import (
+    # dependencies
+    amqp_container, db_container,
+    # our definitions
+    beat_container, single_container, web_container, worker_container,
+    # helper function
+    make_combined_fixture)
 
 
 # Turn off spam from all the random loggers that set themselves up behind us.
@@ -25,6 +31,28 @@ for logger in logging.Logger.manager.loggerDict.values():
         logger.setLevel(logging.WARNING)
 # Turn on spam from the loggers we're interested in.
 logging.getLogger('docker_helper.helper').setLevel(logging.DEBUG)
+
+
+# Set up fixtures. The fixtures are identified by the names passed into the
+# factory functions, but we need references to them at module level so pytest
+# can find them.
+single_container_fixture = single_container.pytest_fixture('single_container')
+web_only_fixture = web_container.pytest_fixture('web_only_container')
+worker_only_fixture = worker_container.pytest_fixture('worker_only_container')
+beat_only_fixture = beat_container.pytest_fixture('beat_only_container')
+
+web_fixture = make_combined_fixture('web')
+worker_fixture = make_combined_fixture('worker')
+beat_fixture = make_combined_fixture('beat')
+
+raw_db_fixture, db_fixture = db_container.pytest_clean_fixtures(
+    'db_container', scope='module')
+raw_amqp_fixture, amqp_fixture = amqp_container.pytest_clean_fixtures(
+    'amqp_container', scope='module')
+
+
+def public_tables(db_container):
+    return [r[1] for r in db_container.list_tables() if r[0] == 'public']
 
 
 def filter_ldconfig_process(ps_rows):
@@ -131,9 +159,7 @@ class TestWeb(object):
         When the web container is running, a migration should have completed
         and there should be some tables in the database.
         """
-        public_tables = [
-            r[1] for r in db_container.list_tables() if r[0] == 'public']
-        assert_that(len(public_tables), GreaterThan(0))
+        assert_that(len(public_tables(db_container)), GreaterThan(0))
 
     @pytest.mark.clean_db_container
     def test_database_tables_not_created(
@@ -142,14 +168,24 @@ class TestWeb(object):
         When the web container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
         """
-        from fixtures import DjangoBootstrapContainer
-        web_container = DjangoBootstrapContainer.for_fixture(
-            'web', [r'Booting worker'], env_extra={'SKIP_MIGRATIONS': '1'})
+        assert_that(public_tables(db_container), Equals([]))
 
-        with web_container.setup(helper=docker_helper):
-            public_tables = [
-                r[1] for r in db_container.list_tables() if r[0] == 'public']
-            assert_that(len(public_tables), Equals(0))
+        web_container.set_helper(docker_helper)
+        with web_container.setup(environment={'SKIP_MIGRATIONS': '1'}):
+            assert_that(public_tables(db_container), Equals([]))
+
+    @pytest.mark.clean_db_container
+    def test_database_tables_not_created_single(
+            self, docker_helper, db_container, amqp_container):
+        """
+        When the single container is running with the `SKIP_MIGRATIONS`
+        environment variable set, there should be no tables in the database.
+        """
+        assert_that(public_tables(db_container), Equals([]))
+
+        single_container.set_helper(docker_helper)
+        with single_container.setup(environment={'SKIP_MIGRATIONS': '1'}):
+            assert_that(public_tables(db_container), Equals([]))
 
     def test_admin_site_live(self, web_container):
         """
