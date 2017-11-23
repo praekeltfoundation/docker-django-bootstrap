@@ -77,14 +77,16 @@ beat_container = DjangoBootstrapContainer.for_fixture(
     command=['celery', 'beat'], publish_port=False)
 
 
-def make_multi_fixture(name, fixtures):
+def make_combined_fixture(base):
+    """
+    This creates a parameterised fixture that allows us to run a single test
+    with both a special-purpose container and the all-in-one container.
+    """
+    name = '{}_container'.format(base)
+    fixtures = ['single_container', '{}_only_container'.format(base)]
+
     @pytest.fixture(name=name, params=fixtures)
     def containers(request):
         yield request.getfixturevalue(request.param)
+
     return containers
-
-
-def make_combined_fixture(base):
-    return make_multi_fixture(
-        '{}_container'.format(base),
-        ['single_container', '{}_only_container'.format(base)])
