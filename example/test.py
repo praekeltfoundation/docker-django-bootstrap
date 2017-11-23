@@ -16,7 +16,7 @@ from testtools.matchers import (
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
-from fixtures import (
+from definitions import (
     # dependencies
     amqp_container, db_container,
     # our definitions
