@@ -1,5 +1,4 @@
 git+https://github.com/praekeltfoundation/seaworthy.git@f17482d79ee510fd788b72c986b3419db3959860
 iso8601
-pytest >= 3.1
-pytest-catchlog
+pytest >= 3.3
 testtools
