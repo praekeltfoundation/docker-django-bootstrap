@@ -202,8 +202,13 @@ Nginx is set up with mostly default config:
 * Serves files from `/static/` and `/media/`
 * All other requests are proxied to the Gunicorn socket
 
-Generally you shouldn't need to adjust Nginx's settings. If you do, the configuration files of interest are at:
-* `/etc/nginx/nginx.conf`: Main configuration
-* `/etc/nginx/conf.d/django.conf`: Proxy configuration
+Generally you shouldn't need to adjust Nginx's settings. If you do, the configuration is split into several files that can be overridden individually:
+* `/etc/nginx/nginx.conf`: Main configuration (including logging and gzip compression)
+* `/etc/nginx/conf.d/`
+  * `django.conf`: The primary server configuration
+  * `django.conf.d/`
+    * `upstream.conf`: Upstream connection to Gunicorn
+    * `locations/*.conf`: Each server location (static, media, root)
+    * `maps/*.conf`: Nginx maps for setting variables
 
 We make a few adjustments to Nginx's default configuration to better work with Gunicorn. See the [config file](nginx/conf.d/django.conf) for all the details. One important point is that we consider the `X-Forwarded-Proto` header, when set to the value of `https`, as an indicator that the client connection was made over HTTPS and is secure. Gunicorn considers a few more headers for this purpose, `X-Forwarded-Protocol` and `X-Forwarded-Ssl`, but our Nginx config is set to remove those headers to prevent misuse.
