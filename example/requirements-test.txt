@@ -1,5 +1,4 @@
-seaworthy >= 0.1.2
+seaworthy >= 0.2
 iso8601
-pytest >= 3.1
-pytest-catchlog
+pytest >= 3.3
 testtools
