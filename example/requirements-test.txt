@@ -1,4 +1,6 @@
 seaworthy >= 0.2
+# FIXME: https://github.com/praekeltfoundation/seaworthy/issues/64
+docker < 3.2.0
 iso8601
 pytest >= 3.3
 testtools
