@@ -1,6 +1,6 @@
 sudo: required
-services:
-  - docker
+group: trusty_latest
+services: docker
 language: python
 python: '3.6'
 
@@ -21,10 +21,6 @@ env:
     - PYTHON_VERSION=3.6 VARIANT=jessie  VERSION_LATEST=  TAG_LATEST=1
     - PYTHON_VERSION=3.6 VARIANT=stretch VERSION_LATEST=  TAG_LATEST=
 
-# Update Docker Engine and Compose
-before_install:
-  - sudo apt-get update
-  - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-ce
 install:
   - (cd example; pip install -r requirements-test.txt)
 
