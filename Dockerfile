@@ -15,8 +15,7 @@ RUN set -ex; \
  RUN apt-get-install.sh libpq5
 
 # Install a modern Nginx and configure
-ENV NGINX_VERSION=1.12.2 \
-    NGINX_DEB_RELEASE=1 \
+ENV NGINX_VERSION=1.14.0 \
     NGINX_GPG_KEY=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
 RUN set -ex; \
     fetchDeps=" \
@@ -30,7 +29,7 @@ RUN set -ex; \
     echo "deb http://nginx.org/packages/debian/ $codename nginx" > /etc/apt/sources.list.d/nginx.list; \
     apt-get-purge.sh $fetchDeps; \
     \
-    apt-get-install.sh "nginx=$NGINX_VERSION-$NGINX_DEB_RELEASE\~$codename"; \
+    apt-get-install.sh "nginx=$NGINX_VERSION-1\~$codename"; \
     rm /etc/nginx/conf.d/default.conf; \
 # Add nginx user to django group so that Nginx can read/write to gunicorn socket
     adduser nginx django
