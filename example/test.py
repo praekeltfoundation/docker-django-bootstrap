@@ -421,9 +421,9 @@ class TestWeb(object):
         runtime if it is a mounted volume.
         """
         [app_media_ownership] = web_container.exec_run(
-            ['stat', '-c', '%u:%g', '/app/media'])
+            ['stat', '-c', '%U:%G', '/app/media'])
 
-        assert_that(app_media_ownership, Equals('104:107'))
+        assert_that(app_media_ownership, Equals('django:django'))
 
 
 class TestCeleryWorker(object):

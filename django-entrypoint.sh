@@ -16,7 +16,7 @@ fi
 if [ "$1" = 'gunicorn' ]; then
   # Do a chown of the /app/media directory (if it exists) at runtime in case the
   # directory was mounted as a root-owned volume.
-  if [ -d /app/media ] && [ "$(stat -c %u /app/media)" != "$(id -u django)" ]; then
+  if [ -d /app/media ] && [ "$(stat -c %U /app/media)" != 'django' ]; then
     chown -R django:django /app/media
   fi
 
