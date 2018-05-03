@@ -420,7 +420,8 @@ class TestWeb(object):
         The /app/media directory should have the correct ownership set at
         runtime if it is a mounted volume.
         """
-        [app_media_ownership] = web_container.exec_run(['stat', '-c', '%u:%g'])
+        [app_media_ownership] = web_container.exec_run(
+            ['stat', '-c', '%u:%g', '/app/media'])
 
         assert_that(app_media_ownership, Equals('104:107'))
 
