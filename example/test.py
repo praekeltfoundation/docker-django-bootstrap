@@ -415,6 +415,15 @@ class TestWeb(object):
             Not(Contains('Vary')),
         ))
 
+    def test_media_volume_ownership(self, web_container):
+        """
+        The /app/media directory should have the correct ownership set at
+        runtime if it is a mounted volume.
+        """
+        [app_media_ownership] = web_container.exec_run(['stat', '-c', '%u:%g'])
+
+        assert_that(app_media_ownership, Equals('104:107'))
+
 
 class TestCeleryWorker(object):
     def test_expected_processes(self, worker_only_container):
