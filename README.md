@@ -161,23 +161,37 @@ The following environment variables can be used to configure Celery, but, other 
 * Default: none
 * Celery option: `-A`/`--app`
 
-> **NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.
+<details>
+  <summary>Deprecated environment variables</summary>
+  <blockquote>**NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.</blockquote>
 
-#### `CELERY_BROKER`:
-* Required: no
-* Default: none
-* Celery option: `-b`/`--broker`
+  <h4>`CELERY_BROKER`:</h4>
+  <ul>
+    <li>Required: no</li>
+    <li>Default: none</li>
+    <li>Celery option: `-b`/`--broker`</li>
+  </ul>
 
-#### `CELERY_LOGLEVEL`:
-* Required: no
-* Default: none
-* Celery option: `-l`/`--loglevel`
+  <h4>`CELERY_LOGLEVEL`:</h4>
+  <ul>
+  <li>Required: no</li>
+  <li>Default: none</li>
+  <li>Celery option: `-l`/`--loglevel`</li>
+  </ul>
 
-#### `CELERY_CONCURRENCY`:
-Note that by default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** here to ensure containers use a consistent and small amount of resources. If you need to run many worker processes, they should be in separate containers.
-* Required: no
-* Default: **1**
-* Celery option: `-c`/`--concurrency`
+  <h4>`CELERY_CONCURRENCY`:</h4>
+  <ul>
+  <li>Required: no</li>
+  <li>Default: **1**</li>
+  <li>Celery option: `-c`/`--concurrency`</li>
+  </ul>
+
+</details>
+
+#### A note on worker processes
+By default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** in this image to ensure containers use a consistent and small amount of resources no matter what kind of host the containers happen to run on.
+
+If you need more Celery worker processes, you have the choice of either upping the processes per container or running multiple container instances.
 
 ## Other configuration
 ### Gunicorn
