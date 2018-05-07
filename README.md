@@ -163,27 +163,27 @@ The following environment variables can be used to configure Celery, but, other 
 
 <details>
   <summary>Deprecated environment variables</summary>
-  <blockquote>**NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.</blockquote>
+  <blockquote><b>NOTE</b>: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.</blockquote>
 
-  <h4>`CELERY_BROKER`:</h4>
+  <h4><code>CELERY_BROKER</code>:</h4>
   <ul>
     <li>Required: no</li>
     <li>Default: none</li>
-    <li>Celery option: `-b`/`--broker`</li>
+    <li>Celery option: <code>-b</code>/<code>--broker</code></li>
   </ul>
 
-  <h4>`CELERY_LOGLEVEL`:</h4>
+  <h4><code>CELERY_LOGLEVEL</code>:</h4>
   <ul>
   <li>Required: no</li>
   <li>Default: none</li>
-  <li>Celery option: `-l`/`--loglevel`</li>
+  <li>Celery option: <code>-l</code>/<code>--loglevel</code></li>
   </ul>
 
-  <h4>`CELERY_CONCURRENCY`:</h4>
+  <h4><code>CELERY_CONCURRENCY</code>:</h4>
   <ul>
   <li>Required: no</li>
-  <li>Default: **1**</li>
-  <li>Celery option: `-c`/`--concurrency`</li>
+  <li>Default: <b>1</b></li>
+  <li>Celery option: <code>-c</code>/<code>--concurrency</code></li>
   </ul>
 
 </details>
