@@ -29,7 +29,7 @@ RUN set -ex; \
     apt-key add nginx_signing.key; \
     codename="$(. /etc/os-release; echo $VERSION | grep -oE [a-z]+)"; \
     echo "deb http://nginx.org/packages/debian/ $codename nginx" > /etc/apt/sources.list.d/nginx.list; \
-    rm nginx_signing.key
+    rm nginx_signing.key; \
     apt-get-purge.sh $fetchDeps; \
     \
     apt-get-install.sh "nginx=$NGINX_VERSION-1\~$codename"; \
