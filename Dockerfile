@@ -23,10 +23,13 @@ RUN set -ex; \
         $(command -v gpg > /dev/null || echo 'dirmngr gnupg') \
     "; \
     apt-get-install.sh $fetchDeps; \
-    wget -O- https://nginx.org/keys/nginx_signing.key | apt-key add -; \
-    apt-key adv --fingerprint "$NGINX_GPG_KEY"; \
+    wget https://nginx.org/keys/nginx_signing.key; \
+    [ "$(gpg -q --with-fingerprint --with-colons nginx_signing.key | awk -F: '/^fpr:/ { print $10 }')" \
+        = $NGINX_GPG_KEY ]; \
+    apt-key add nginx_signing.key; \
     codename="$(. /etc/os-release; echo $VERSION | grep -oE [a-z]+)"; \
     echo "deb http://nginx.org/packages/debian/ $codename nginx" > /etc/apt/sources.list.d/nginx.list; \
+    rm nginx_signing.key; \
     apt-get-purge.sh $fetchDeps; \
     \
     apt-get-install.sh "nginx=$NGINX_VERSION-1\~$codename"; \
