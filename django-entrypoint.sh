@@ -14,11 +14,13 @@ if [ "$1" = 'celery' ]; then
 fi
 
 if [ "$1" = 'gunicorn' ]; then
-  # Do a chown of the /app/media directory (if it exists) at runtime in case the
-  # directory was mounted as a root-owned volume.
-  if [ -d /app/media ] && [ "$(stat -c %U /app/media)" != 'django' ]; then
-    chown -R django:django /app/media
-  fi
+  # Do a chown of the /app/media & /app/mediafiles directories (if they exist)
+  # at runtime in case the directory was mounted as a root-owned volume.
+  for media in /app/media /app/mediafiles; do
+    if [ -d $media ] && [ "$(stat -c %U $media)" != 'django' ]; then
+      chown -R django:django $media
+    fi
+  done
 
   # Run the migration as the django user so that if it creates a local DB
   # (e.g. when using sqlite in development), that DB is still writable.
