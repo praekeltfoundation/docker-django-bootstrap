@@ -3,7 +3,7 @@ FROM praekeltfoundation/django-bootstrap:$VARIANT
 
 RUN command -v ps > /dev/null || apt-get-install.sh procps
 
-ARG PROJECT=py3
+ARG PROJECT=django2
 COPY ${PROJECT} /app/
 
 RUN pip install -e .
