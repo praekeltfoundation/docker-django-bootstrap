@@ -13,8 +13,8 @@ A `setup.py` was added to install dependencies. An example [Django settings file
 [django-compressor](https://django-compressor.readthedocs.io) is set up to compress some JavaScript and CSS in a dummy template.
 
 ## Usage
-To build the example site Docker image and run tests on it, use these commands:
+To build the example site Docker image and run tests on it, use commands like this:
 ```
-docker build --tag mysite --build-arg VARIANT=py2-stretch --build-arg PROJECT=py2 .
+docker build --tag mysite --build-arg VARIANT=py2-stretch --build-arg PROJECT=django1 .
 python test.py mysite
 ```
