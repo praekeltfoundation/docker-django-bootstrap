@@ -23,7 +23,7 @@ env:
     - PYTHON_VERSION=3.7 VARIANT=stretch TEST_PROJECT=py3 VERSION_LATEST=  TAG_LATEST=1
 
 install:
-  - (cd example; pip install -r requirements-test.txt)
+  - pip install -r tests/requirements.txt
 
 before_script:
   - tag="py$PYTHON_VERSION-$VARIANT"
@@ -32,8 +32,8 @@ before_script:
   - docker pull "$image" || true
 script:
   - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION-$VARIANT" --tag "$image" .
-  - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" --build-arg PROJECT="$TEST_PROJECT" example
-  - pytest -v example/test.py --django-bootstrap-image="mysite:$tag"
+  - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" --build-arg PROJECT="$TEST_PROJECT" tests
+  - pytest -v tests/test.py --django-bootstrap-image="mysite:$tag"
 
 after_script:
   - docker images
