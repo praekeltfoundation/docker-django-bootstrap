@@ -18,8 +18,9 @@ env:
   matrix:
     - PYTHON_VERSION=2.7 VARIANT=jessie  VERSION_LATEST=1 TAG_LATEST=1
     - PYTHON_VERSION=2.7 VARIANT=stretch VERSION_LATEST=1 TAG_LATEST=
-    - PYTHON_VERSION=3.6 VARIANT=jessie  VERSION_LATEST=  TAG_LATEST=1
-    - PYTHON_VERSION=3.6 VARIANT=stretch VERSION_LATEST=  TAG_LATEST=
+    - PYTHON_VERSION=3.6 VARIANT=jessie  VERSION_LATEST=  TAG_LATEST=  SEMVER_PRECISION=2
+    - PYTHON_VERSION=3.6 VARIANT=stretch VERSION_LATEST=  TAG_LATEST=  SEMVER_PRECISION=2
+    - PYTHON_VERSION=3.7 VARIANT=stretch VERSION_LATEST=  TAG_LATEST=1
 
 install:
   - (cd example; pip install -r requirements-test.txt)
@@ -42,6 +43,6 @@ before_deploy:
   - echo "$REGISTRY_PASS" | docker login -u "$REGISTRY_USER" --password-stdin
 deploy:
   provider: script
-  script: dcd -t "$VARIANT" ${TAG_LATEST:+latest} -V "py$PYTHON_VERSION" -S ${VERSION_LATEST:+-L} "$image"
+  script: dcd -t "$VARIANT" ${TAG_LATEST:+latest} -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
   on:
     branch: develop
