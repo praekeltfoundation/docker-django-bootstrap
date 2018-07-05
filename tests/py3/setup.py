@@ -7,7 +7,7 @@ setup(
     author_email='sre@praekelt.org',
     packages=['mysite'],
     install_requires=[
-        'celery >=4.1, <4.2',
+        'celery >=4.2, <4.3',
         'Django >=2.0, <2.1',
         'django_compressor >=2.1',
         'django-environ',
