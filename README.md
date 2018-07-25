@@ -2,15 +2,29 @@
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/praekeltfoundation/django-bootstrap.svg?style=flat-square)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
 [![Travis branch](https://img.shields.io/travis/praekeltfoundation/docker-django-bootstrap/develop.svg?style=flat-square)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
-[![Requires.io](https://img.shields.io/requires/github/praekeltfoundation/docker-django-bootstrap.svg?style=flat-square)](https://requires.io/github/praekeltfoundation/docker-django-bootstrap/requirements/?branch=develop)
 
 Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
-> **Note**: The `:onbuild` tag is no longer being built and won't be updated. This guide has been updated to show how to use the non-`:onbuild` images.
+Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
 
-> **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tag (`:latest`) will remain Debian/Python 2-based as it always has been.
+For more background on running Django in Docker containers, see [this talk](https://www.youtube.com/watch?v=T2hooQzvurQ) ([slides](https://speakerdeck.com/jayh5/deploying-django-web-applications-in-docker-containers)) from PyConZA 2017.
+
+## Index
+1. [Usage](#usage)
+   - [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
+   - [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
+   - [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
+   - [Running other commands](#running-other-commands)
+2. [Celery](#celery)
+   - [Option 1: Celery containers](#option-1-celery-containers)
+   - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
+   - [Celery environment variable configuration](#celery-environment-variable-configuration)
+3. [Choosing an image tag](#choosing-an-image-tag)
+4. [Other configuration](#other-configuration)
+   - [Gunicorn](#gunicorn)
+   - [Nginx](#nginx)
 
 ## Usage
 #### Step 1: Get your Django project in shape
@@ -162,23 +176,47 @@ The following environment variables can be used to configure Celery, but, other 
 * Default: none
 * Celery option: `-A`/`--app`
 
-> **NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.
+<details>
+  <summary>Deprecated environment variables</summary>
+  <blockquote><b>NOTE</b>: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.</blockquote>
 
-#### `CELERY_BROKER`:
-* Required: no
-* Default: none
-* Celery option: `-b`/`--broker`
+  <h4><code>CELERY_BROKER</code>:</h4>
+  <ul>
+    <li>Required: no</li>
+    <li>Default: none</li>
+    <li>Celery option: <code>-b</code>/<code>--broker</code></li>
+  </ul>
 
-#### `CELERY_LOGLEVEL`:
-* Required: no
-* Default: none
-* Celery option: `-l`/`--loglevel`
+  <h4><code>CELERY_LOGLEVEL</code>:</h4>
+  <ul>
+  <li>Required: no</li>
+  <li>Default: none</li>
+  <li>Celery option: <code>-l</code>/<code>--loglevel</code></li>
+  </ul>
 
-#### `CELERY_CONCURRENCY`:
-Note that by default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** here to ensure containers use a consistent and small amount of resources. If you need to run many worker processes, they should be in separate containers.
-* Required: no
-* Default: **1**
-* Celery option: `-c`/`--concurrency`
+  <h4><code>CELERY_CONCURRENCY</code>:</h4>
+  <ul>
+  <li>Required: no</li>
+  <li>Default: <b>1</b></li>
+  <li>Celery option: <code>-c</code>/<code>--concurrency</code></li>
+  </ul>
+
+</details>
+
+#### A note on worker processes
+By default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** in this image to ensure containers use a consistent and small amount of resources no matter what kind of host the containers happen to run on.
+
+If you need more Celery worker processes, you have the choice of either upping the processes per container or running multiple container instances.
+
+## Choosing an image tag
+The following tags are available:
+
+|                    | Python 2.7                                                  | Python 3.6             | Python 3.7                                  |
+|--------------------|-------------------------------------------------------------|------------------------|---------------------------------------------|
+| **Debian Jessie**  | `py2.7-jessie` `py2-jessie` `jessie` `py2.7` `py2` `latest` | `py3.6-jessie` `py3.6` | N/A                                         |
+| **Debian Stretch** | `py2.7-stretch` `py2-stretch` `stretch`                     | `py3.6-stretch`        | `py3.7-stretch` `py3-stretch` `py3.7` `py3` |
+
+It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
 
 ## Other configuration
 ### Gunicorn

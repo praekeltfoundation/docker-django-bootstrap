@@ -1,4 +1,4 @@
-seaworthy >= 0.2
+seaworthy >= 0.3
 iso8601
 pytest >= 3.3
 testtools
