@@ -7,6 +7,20 @@ Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
+## Index
+1. [Usage](#usage)
+  1. [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
+  2. [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
+  3. [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
+  4. [Running other commands](#running-other-commands)
+2. [Celery](#celery)
+  1. [Option 1: Celery containers](#option-1-celery-containers)
+  2. [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
+  3. [Celery environment variable configuration](#celery-environment-variable-configuration)
+3. [Other configuration](#other-configuration)
+  1. [Gunicorn](#gunicorn)
+  2. [Nginx](#nginx)
+
 ## Usage
 #### Step 1: Get your Django project in shape
 There are a few ways that your Django project needs to be set up in order to be compatible with this Docker image.
