@@ -13,18 +13,18 @@ For more background on running Django in Docker containers, see [this talk](http
 
 ## Index
 1. [Usage](#usage)
-  - [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
-  - [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
-  - [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
-  - [Running other commands](#running-other-commands)
+   - [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
+   - [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
+   - [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
+   - [Running other commands](#running-other-commands)
 2. [Celery](#celery)
-  - [Option 1: Celery containers](#option-1-celery-containers)
-  - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
-  - [Celery environment variable configuration](#celery-environment-variable-configuration)
+   - [Option 1: Celery containers](#option-1-celery-containers)
+   - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
+   - [Celery environment variable configuration](#celery-environment-variable-configuration)
 3. [Choosing an image tag](#choosing-an-image-tag)
 4. [Other configuration](#other-configuration)
-  - [Gunicorn](#gunicorn)
-  - [Nginx](#nginx)
+   - [Gunicorn](#gunicorn)
+   - [Nginx](#nginx)
 
 ## Usage
 #### Step 1: Get your Django project in shape
