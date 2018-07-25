@@ -9,6 +9,8 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 
 Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
 
+For more background on running Django in Docker containers, see [this talk](https://www.youtube.com/watch?v=T2hooQzvurQ) ([slides](https://speakerdeck.com/jayh5/deploying-django-web-applications-in-docker-containers)) from PyConZA 2017.
+
 ## Index
 1. [Usage](#usage)
   1. [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
