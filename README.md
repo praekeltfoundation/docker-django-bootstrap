@@ -7,7 +7,7 @@ Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
-Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/).
+Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag).
 
 ## Index
 1. [Usage](#usage)
@@ -19,7 +19,8 @@ Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation
   1. [Option 1: Celery containers](#option-1-celery-containers)
   2. [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
   3. [Celery environment variable configuration](#celery-environment-variable-configuration)
-3. [Other configuration](#other-configuration)
+3. [Choosing an image tag](#choosing-an-image-tag)
+4. [Other configuration](#other-configuration)
   1. [Gunicorn](#gunicorn)
   2. [Nginx](#nginx)
 
@@ -204,6 +205,16 @@ The following environment variables can be used to configure Celery, but, other 
 By default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** in this image to ensure containers use a consistent and small amount of resources no matter what kind of host the containers happen to run on.
 
 If you need more Celery worker processes, you have the choice of either upping the processes per container or running multiple container instances.
+
+## Choosing an image tag
+The following tags are available:
+
+|                    | Python 2.7                                                  | Python 3.6             | Python 3.7                                  |
+|--------------------|-------------------------------------------------------------|------------------------|---------------------------------------------|
+| **Debian Jessie**  | `py2.7-jessie` `py2-jessie` `jessie` `py2.7` `py2` `latest` | `py3.6-jessie` `py3.6` | N/A                                         |
+| **Debian Stretch** | `py2.7-stretch` `py2-stretch` `stretch`                     | `py3.6-stretch`        | `py3.7-stretch` `py3-stretch` `py3.7` `py3` |
+
+It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
 
 ## Other configuration
 ### Gunicorn
