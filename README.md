@@ -7,6 +7,8 @@ Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
+Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/).
+
 ## Index
 1. [Usage](#usage)
   1. [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
