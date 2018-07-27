@@ -266,7 +266,7 @@ The sync worker type is simple, easy to reason about, and can scale well when de
 ### What about Django Channels?
 [Django Channels](https://channels.readthedocs.io) extend Django for protocols beyond HTTP/1.1 and generally enable Django to be used for more asynchronous applications. Django Channels does not use WSGI and instead using a protocol called [Asynchronous Server Gateway Interface (ASGI)](https://channels.readthedocs.io/en/latest/asgi.html). Gunicorn does not support ASGI and instead the reference ASGI server implementation, [Daphne](https://github.com/django/daphne/), is typically used to serve Django Channels applications.
 
-Django Channels is beyond the scope of this project. We may one day start a `docker-django-channels` project, though ;-).
+Django Channels is beyond the scope of this project. We may one day start a `docker-django-channels` project, though :wink:.
 
 ### What about using container groups (i.e. pods)?
 django-bootstrap currently runs both Nginx and Gunicorn processes in the same container. It is generally considered best-practice to run only one thing inside a container. Technically, it would be possible to run Nginx and Gunicorn in separate containers that are grouped together and share some volumes. The idea of a "pod" of containers was popularised by Kubernetes. Containers in a pod are typically co-located, so sharing files between the containers is practical:
