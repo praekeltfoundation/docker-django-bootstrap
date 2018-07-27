@@ -22,7 +22,13 @@ For more background on running Django in Docker containers, see [this talk](http
    - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
    - [Celery environment variable configuration](#celery-environment-variable-configuration)
 3. [Choosing an image tag](#choosing-an-image-tag)
-4. [Other configuration](#other-configuration)
+4. [Frequently asked questions](#frequently-asked-questions)
+   - [How is this deployed?](#how-is-this-deployed)
+   - [Why is Nginx needed?](#why-is-nginx-needed)
+   - [What about WhiteNoise?](#what-about-whitenoise)
+   - [What about Gunicorn's async workers?](#what-about-gunicorn-s-async-workers)
+   - [What about Django Channels?](#what-about-django-channels)
+5. [Other configuration](#other-configuration)
    - [Gunicorn](#gunicorn)
    - [Nginx](#nginx)
 
@@ -217,6 +223,54 @@ The following tags are available:
 | **Debian Stretch** | `py2.7-stretch` `py2-stretch` `stretch`                     | `py3.6-stretch`        | `py3.7-stretch` `py3-stretch` `py3.7` `py3` |
 
 It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
+
+## Frequently asked questions
+### How is this deployed?
+This will depend very much on your infrastructure. These images were designed with an architecture like this in mind:
+![Architecture diagram](images/architecture.svg)
+
+This image does not require that you use PostgreSQL or RabbitMQ. You can configure Django however you would like, those are just the systems we use with it.
+
+The image was also designed to be used with a container orchestration system. We use Mesosphere DC/OS but it should work just as well on Kubernetes. We run services that require persistent storage, such as databases or message brokers outside of our container orchestration system. This looks something like this:
+![Container diagram](images/containers.svg)
+
+Generally a single image based on django-bootstrap takes on the role of running Django or Celery depending on how each container running the image is configured.
+
+### Why is Nginx needed?
+The primary reason Nginx is necessary is that a key part of Gunicorn's design relies on Nginx buffering incoming requests. This design goes back to the original [design of Unicorn for Ruby](https://bogomips.org/unicorn/DESIGN.html):
+> [...] neither keepalive nor pipelining are supported. These aren't needed since Unicorn is only designed to serve fast, low-latency clients directly. Do one thing, do it well; let nginx handle slow clients.
+
+You can also read about this in [Gunicorn's design documentation](http://docs.gunicorn.org/en/latest/design.html). So, when using Gunicorn (with the default "sync workers"), it's critical that a buffering proxy (such as Nginx) is used.
+
+In addition to this reason, Nginx is used to perform the following functions:
+* Serves static files for Django which it can do very efficiently, rather than requiring Python code to do so.
+* Performs some basic optimisations such as gzipping responses, setting some cache-control headers for static files, etc.
+* Adjusts some headers received by clients (see [Other configuration: Nginx](#nginx)).
+
+### What about WhiteNoise?
+[WhiteNoise](http://whitenoise.evans.io) is a library to simplify static file serving with Python webservers and integrates with Django. It encapsulates a lot of best-practices and useful optimisations when serving static files. In fact, some of the optimisations it uses we copied and used in the Nginx configuration for django-bootstrap.
+
+WhiteNoise is not typically used in conjunction with a static file-serving reverse proxy and so we don't recommend using it with django-bootstrap. Additionally, WhiteNoise [does not support serving Django media files](http://whitenoise.evans.io/en/stable/django.html#serving-media-files)--which is **not** a thing we recommend you do for the reasons outlined in the WhiteNoise documentation--but a requirement we have had for some of our projects.
+
+WhiteNoise does not solve the problem of buffering requests for Gunicorn's workers.
+
+### What about Gunicorn's async workers?
+Gunicorn does provide various implementations of asynchronous workers. See [Choosing a Worker Type](http://docs.gunicorn.org/en/latest/design.html#choosing-a-worker-type). These asynchronous workers can work well with django-bootstrap.
+
+When using async workers, it could be more practical to use WhiteNoise without Nginx, but that is beyond the scope of this project.
+
+The sync worker type is simple, easy to reason about, and can scale well when deployed properly and used for its intended purpose.
+
+### What about Django Channels?
+[Django Channels](https://channels.readthedocs.io) extend Django for protocols beyond HTTP/1.1 and generally enable Django to be used for more asynchronous applications. Django Channels does not use WSGI and instead using a protocol called [Asynchronous Server Gateway Interface (ASGI)](https://channels.readthedocs.io/en/latest/asgi.html). Gunicorn does not support ASGI and instead the reference ASGI server implementation, [Daphne](https://github.com/django/daphne/), is typically used to serve Django Channels applications.
+
+Django Channels is beyond the scope of this project. We may one day start a `docker-django-channels` project, though ;-).
+
+### What about using container groups (i.e. pods)?
+django-bootstrap currently runs both Nginx and Gunicorn processes in the same container. It is generally considered best-practice to run only one thing inside a container. Technically, it would be possible to run Nginx and Gunicorn in separate containers that are grouped together and share some volumes. The idea of a "pod" of containers was popularised by Kubernetes. Containers in a pod are typically co-located, so sharing files between the containers is practical:
+![Pod diagram](images/pod.svg)
+
+This is a direction we want to take the project, but currently our infrastructure does not support the pod pattern. We have experimented with this [before](https://github.com/praekeltfoundation/docker-django-bootstrap/pull/69) and would welcome pull requests.
 
 ## Other configuration
 ### Gunicorn
