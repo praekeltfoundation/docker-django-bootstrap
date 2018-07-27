@@ -228,13 +228,13 @@ It's recommended that you pick the most specific tag for what you need, as short
 ### How is this deployed?
 This will depend very much on your infrastructure. These images were designed with an architecture like this in mind:
 
-<img src="images/architecture.svg" alt="Architecture diagram" width="200px"/>
+<img src="images/architecture.svg" alt="Architecture diagram" width="480"/>
 
 This image does not require that you use PostgreSQL or RabbitMQ. You can configure Django however you would like, those are just the systems we use with it.
 
 The image was also designed to be used with a container orchestration system. We use Mesosphere DC/OS but it should work just as well on Kubernetes. We run services that require persistent storage, such as databases or message brokers outside of our container orchestration system. This looks something like this:
 
-<img src="images/containers.svg" alt="Container diagram" width="200px"/>
+<img src="images/containers.svg" alt="Container diagram" width="480px"/>
 
 Generally a single image based on django-bootstrap takes on the role of running Django or Celery depending on how each container running the image is configured.
 
@@ -271,7 +271,7 @@ Django Channels is beyond the scope of this project. We may one day start a `doc
 ### What about using container groups (i.e. pods)?
 django-bootstrap currently runs both Nginx and Gunicorn processes in the same container. It is generally considered best-practice to run only one thing inside a container. Technically, it would be possible to run Nginx and Gunicorn in separate containers that are grouped together and share some volumes. The idea of a "pod" of containers was popularised by Kubernetes. Containers in a pod are typically co-located, so sharing files between the containers is practical:
 
-<img src="images/pod.svg" alt="Pod diagram" width="200px"/>
+<img src="images/pod.svg" alt="Pod diagram" width="480px"/>
 
 This is a direction we want to take the project, but currently our infrastructure does not support the pod pattern. We have experimented with this [before](https://github.com/praekeltfoundation/docker-django-bootstrap/pull/69) and would welcome pull requests.
 
