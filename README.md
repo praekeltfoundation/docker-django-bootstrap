@@ -226,20 +226,20 @@ It's recommended that you pick the most specific tag for what you need, as short
 
 ## Frequently asked questions
 ### How is this deployed?
-This will depend very much on your infrastructure. These images were designed with an architecture like this in mind:
+This will depend very much on your infrastructure. This Docker image was designed with an architecture like this in mind:
 
 <img src="images/architecture.svg" alt="Architecture diagram" width="480"/>
 
-This image does not require that you use PostgreSQL or RabbitMQ. You can configure Django however you would like, those are just the systems we use with it.
+django-bootstrap does not require that you use PostgreSQL or RabbitMQ. You can configure Django however you would like, those are just the systems we use with it.
 
-The image was also designed to be used with a container orchestration system. We use Mesosphere DC/OS but it should work just as well on Kubernetes. We run services that require persistent storage, such as databases or message brokers outside of our container orchestration system. This looks something like this:
+The image was also designed to be used with a container orchestration system. We use Mesosphere DC/OS but it should work just as well on Kubernetes. We run services that require persistent storage, such as databases or message brokers, outside of our container orchestration system. This looks something like this:
 
 <img src="images/containers.svg" alt="Container diagram" width="480px"/>
 
 Generally a single image based on django-bootstrap takes on the role of running Django or Celery depending on how each container running the image is configured.
 
 ### Why is Nginx needed?
-The primary reason Nginx is necessary is that a key part of Gunicorn's design relies on Nginx buffering incoming requests. This design goes back to the original [design of Unicorn for Ruby](https://bogomips.org/unicorn/DESIGN.html):
+The primary reason Nginx is necessary is that a key part of Gunicorn's design relies on a proxy to buffer incoming requests. This design goes back to the original [design of Unicorn for Ruby](https://bogomips.org/unicorn/DESIGN.html):
 > [...] neither keepalive nor pipelining are supported. These aren't needed since Unicorn is only designed to serve fast, low-latency clients directly. Do one thing, do it well; let nginx handle slow clients.
 
 You can also read about this in [Gunicorn's design documentation](http://docs.gunicorn.org/en/latest/design.html). So, when using Gunicorn (with the default "sync workers"), it's critical that a buffering proxy (such as Nginx) is used.
@@ -250,9 +250,9 @@ In addition to this reason, Nginx is used to perform the following functions:
 * Adjusts some headers received by clients (see [Other configuration: Nginx](#nginx)).
 
 ### What about WhiteNoise?
-[WhiteNoise](http://whitenoise.evans.io) is a library to simplify static file serving with Python webservers and integrates with Django. It encapsulates a lot of best-practices and useful optimisations when serving static files. In fact, some of the optimisations it uses we copied and used in the Nginx configuration for django-bootstrap.
+[WhiteNoise](http://whitenoise.evans.io) is a library to simplify static file serving with Python webservers that integrates with Django. It encapsulates a lot of best-practices and useful optimisations when serving static files. In fact, some of the optimisations it uses we copied and used in the Nginx configuration for django-bootstrap.
 
-WhiteNoise is not typically used in conjunction with a static file-serving reverse proxy and so we don't recommend using it with django-bootstrap. Additionally, WhiteNoise [does not support serving Django media files](http://whitenoise.evans.io/en/stable/django.html#serving-media-files)--which is **not** a thing we recommend you do for the reasons outlined in the WhiteNoise documentation--but a requirement we have had for some of our projects.
+WhiteNoise is not typically used in conjunction with a static file-serving reverse proxy and so we don't recommend using it with django-bootstrap. Additionally, WhiteNoise [does not support serving Django media files](http://whitenoise.evans.io/en/stable/django.html#serving-media-files)--which is **not** a thing we recommend you do, for the reasons outlined in the WhiteNoise documentation--but a requirement we have had for some of our projects.
 
 WhiteNoise does not solve the problem of buffering requests for Gunicorn's workers.
 
@@ -264,7 +264,7 @@ When using async workers, it could be more practical to use WhiteNoise without N
 The sync worker type is simple, easy to reason about, and can scale well when deployed properly and used for its intended purpose.
 
 ### What about Django Channels?
-[Django Channels](https://channels.readthedocs.io) extend Django for protocols beyond HTTP/1.1 and generally enable Django to be used for more asynchronous applications. Django Channels does not use WSGI and instead using a protocol called [Asynchronous Server Gateway Interface (ASGI)](https://channels.readthedocs.io/en/latest/asgi.html). Gunicorn does not support ASGI and instead the reference ASGI server implementation, [Daphne](https://github.com/django/daphne/), is typically used to serve Django Channels applications.
+[Django Channels](https://channels.readthedocs.io) extends Django for protocols beyond HTTP/1.1 and generally enables Django to be used for more asynchronous applications. Django Channels does not use WSGI and instead uses a protocol called [Asynchronous Server Gateway Interface (ASGI)](https://channels.readthedocs.io/en/latest/asgi.html). Gunicorn does not support ASGI and instead the reference ASGI server implementation, [Daphne](https://github.com/django/daphne/), is typically used instead.
 
 Django Channels is beyond the scope of this project. We may one day start a `docker-django-channels` project, though :wink:.
 
