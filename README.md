@@ -26,7 +26,7 @@ For more background on running Django in Docker containers, see [this talk](http
    - [How is this deployed?](#how-is-this-deployed)
    - [Why is Nginx needed?](#why-is-nginx-needed)
    - [What about WhiteNoise?](#what-about-whitenoise)
-   - [What about Gunicorn's async workers?](#what-about-gunicorn-s-async-workers)
+   - [What about Gunicorn's async workers?](#what-about-gunicorns-async-workers)
    - [What about Django Channels?](#what-about-django-channels)
 5. [Other configuration](#other-configuration)
    - [Gunicorn](#gunicorn)
