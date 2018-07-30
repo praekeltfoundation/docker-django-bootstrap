@@ -63,7 +63,7 @@ If your project makes use of user-uploaded media files, it must be set up as fol
 ***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory (`/app`) will be served by Nginx. Do not store anything here that you do not want the world to see.
 
 **Django settings file**
-You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](example/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
+You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](tests/django2/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
 
 #### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
@@ -101,7 +101,7 @@ By default the script will run the migrations when starting up. This may not be 
 #### Step 3: Add a `.dockerignore` file (if copying in the project source)
 If you are copying the full source of your project into your Docker image (i.e. doing `COPY . /app`), then it is important to add a `.dockerignore` file.
 
-Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](example/.dockerignore) from the example Django project in this repo.
+Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](tests/.dockerignore) from the example Django project in this repo.
 
 When copying in the source of your project, some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
 
