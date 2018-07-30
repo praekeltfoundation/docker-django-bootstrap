@@ -1,7 +1,7 @@
 # docker-django-bootstrap
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/praekeltfoundation/django-bootstrap.svg?style=flat-square)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
-[![Travis branch](https://img.shields.io/travis/praekeltfoundation/docker-django-bootstrap/develop.svg?style=flat-square)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
+[![Docker Pulls](https://flat.badgen.net/docker/pulls/praekeltfoundation/django-bootstrap)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
+[![Travis branch](https://flat.badgen.net/travis/praekeltfoundation/docker-django-bootstrap/develop)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
 
 Dockerfile for quickly running Django projects in a Docker container.
 
@@ -22,7 +22,13 @@ For more background on running Django in Docker containers, see [this talk](http
    - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
    - [Celery environment variable configuration](#celery-environment-variable-configuration)
 3. [Choosing an image tag](#choosing-an-image-tag)
-4. [Other configuration](#other-configuration)
+4. [Frequently asked questions](#frequently-asked-questions)
+   - [How is this deployed?](#how-is-this-deployed)
+   - [Why is Nginx needed?](#why-is-nginx-needed)
+   - [What about WhiteNoise?](#what-about-whitenoise)
+   - [What about Gunicorn's async workers?](#what-about-gunicorns-async-workers)
+   - [What about Django Channels?](#what-about-django-channels)
+5. [Other configuration](#other-configuration)
    - [Gunicorn](#gunicorn)
    - [Nginx](#nginx)
 
@@ -57,7 +63,7 @@ If your project makes use of user-uploaded media files, it must be set up as fol
 ***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory (`/app`) will be served by Nginx. Do not store anything here that you do not want the world to see.
 
 **Django settings file**
-You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](example/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
+You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](tests/django2/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
 
 #### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
@@ -95,7 +101,7 @@ By default the script will run the migrations when starting up. This may not be 
 #### Step 3: Add a `.dockerignore` file (if copying in the project source)
 If you are copying the full source of your project into your Docker image (i.e. doing `COPY . /app`), then it is important to add a `.dockerignore` file.
 
-Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](example/.dockerignore) from the example Django project in this repo.
+Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](tests/.dockerignore) from the example Django project in this repo.
 
 When copying in the source of your project, some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
 
@@ -217,6 +223,57 @@ The following tags are available:
 | **Debian Stretch** | `py2.7-stretch` `py2-stretch` `stretch`                     | `py3.6-stretch`        | `py3.7-stretch` `py3-stretch` `py3.7` `py3` |
 
 It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
+
+## Frequently asked questions
+### How is this deployed?
+This will depend very much on your infrastructure. This Docker image was designed with an architecture like this in mind:
+
+<img src="images/architecture.svg" alt="Architecture diagram" width="480"/>
+
+django-bootstrap does not require that you use PostgreSQL or RabbitMQ. You can configure Django however you would like, those are just the systems we use with it.
+
+The image was also designed to be used with a container orchestration system. We use Mesosphere DC/OS but it should work just as well on Kubernetes. We run services that require persistent storage, such as databases or message brokers, outside of our container orchestration system. This looks something like this:
+
+<img src="images/containers.svg" alt="Container diagram" width="480px"/>
+
+Generally a single image based on django-bootstrap takes on the role of running Django or Celery depending on how each container running the image is configured.
+
+### Why is Nginx needed?
+The primary reason Nginx is necessary is that a key part of Gunicorn's design relies on a proxy to buffer incoming requests. This design goes back to the original [design of Unicorn for Ruby](https://bogomips.org/unicorn/DESIGN.html):
+> [...] neither keepalive nor pipelining are supported. These aren't needed since Unicorn is only designed to serve fast, low-latency clients directly. Do one thing, do it well; let nginx handle slow clients.
+
+You can also read about this in [Gunicorn's design documentation](http://docs.gunicorn.org/en/latest/design.html). So, when using Gunicorn (with the default "sync workers"), it's critical that a buffering proxy (such as Nginx) is used.
+
+In addition to this reason, Nginx is used to perform the following functions:
+* Serves static files for Django which it can do very efficiently, rather than requiring Python code to do so.
+* Performs some basic optimisations such as gzipping responses, setting some cache-control headers for static files, etc.
+* Adjusts some headers received by clients (see [Other configuration: Nginx](#nginx)).
+
+### What about WhiteNoise?
+[WhiteNoise](http://whitenoise.evans.io) is a library to simplify static file serving with Python webservers that integrates with Django. It encapsulates a lot of best-practices and useful optimisations when serving static files. In fact, some of the optimisations it uses we copied and used in the Nginx configuration for django-bootstrap.
+
+WhiteNoise is not typically used in conjunction with a static file-serving reverse proxy and so we don't recommend using it with django-bootstrap. Additionally, WhiteNoise [does not support serving Django media files](http://whitenoise.evans.io/en/stable/django.html#serving-media-files)--which is **not** a thing we recommend you do, for the reasons outlined in the WhiteNoise documentation--but a requirement we have had for some of our projects.
+
+WhiteNoise does not solve the problem of buffering requests for Gunicorn's workers.
+
+### What about Gunicorn's async workers?
+Gunicorn does provide various implementations of asynchronous workers. See [Choosing a Worker Type](http://docs.gunicorn.org/en/latest/design.html#choosing-a-worker-type). These asynchronous workers can work well with django-bootstrap.
+
+When using async workers, it could be more practical to use WhiteNoise without Nginx, but that is beyond the scope of this project.
+
+The sync worker type is simple, easy to reason about, and can scale well when deployed properly and used for its intended purpose.
+
+### What about Django Channels?
+[Django Channels](https://channels.readthedocs.io) extends Django for protocols beyond HTTP/1.1 and generally enables Django to be used for more asynchronous applications. Django Channels does not use WSGI and instead uses a protocol called [Asynchronous Server Gateway Interface (ASGI)](https://channels.readthedocs.io/en/latest/asgi.html). Gunicorn does not support ASGI and instead the reference ASGI server implementation, [Daphne](https://github.com/django/daphne/), is typically used instead.
+
+Django Channels is beyond the scope of this project. We may one day start a `docker-django-channels` project, though :wink:.
+
+### What about using container groups (i.e. pods)?
+django-bootstrap currently runs both Nginx and Gunicorn processes in the same container. It is generally considered best-practice to run only one thing inside a container. Technically, it would be possible to run Nginx and Gunicorn in separate containers that are grouped together and share some volumes. The idea of a "pod" of containers was popularised by Kubernetes. Containers in a pod are typically co-located, so sharing files between the containers is practical:
+
+<img src="images/pod.svg" alt="Pod diagram" width="480px"/>
+
+This is a direction we want to take the project, but currently our infrastructure does not support the pod pattern. We have experimented with this [before](https://github.com/praekeltfoundation/docker-django-bootstrap/pull/69) and would welcome pull requests.
 
 ## Other configuration
 ### Gunicorn
