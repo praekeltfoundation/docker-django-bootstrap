@@ -9,6 +9,8 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 
 Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
 
+> **NOTE:** The `latest`/shorter form tags now track the latest Python and Debian releases. The latest/shorter tags for these images originally pointed to Debian Jessie and Python 2.7 images. This has been updated to match the behaviour of the upstream image tags. You should generally use the most specific tag that you need, for example `py3.6-stretch`.
+
 For more background on running Django in Docker containers, see [this talk](https://www.youtube.com/watch?v=T2hooQzvurQ) ([slides](https://speakerdeck.com/jayh5/deploying-django-web-applications-in-docker-containers)) from PyConZA 2017.
 
 ## Index
@@ -217,10 +219,10 @@ If you need more Celery worker processes, you have the choice of either upping t
 ## Choosing an image tag
 The following tags are available:
 
-|                    | Python 2.7                                                  | Python 3.6             | Python 3.7                                  |
-|--------------------|-------------------------------------------------------------|------------------------|---------------------------------------------|
-| **Debian Jessie**  | `py2.7-jessie` `py2-jessie` `jessie` `py2.7` `py2` `latest` | `py3.6-jessie` `py3.6` | N/A                                         |
-| **Debian Stretch** | `py2.7-stretch` `py2-stretch` `stretch`                     | `py3.6-stretch`        | `py3.7-stretch` `py3-stretch` `py3.7` `py3` |
+|                    | Python 2.7                                  | Python 3.6              | Python 3.7                                                     |
+|--------------------|---------------------------------------------|-------------------------|----------------------------------------------------------------|
+| **Debian Jessie**  | `py2.7-jessie` `py2-jessie` `jessie`        | `py3.6-jessie`          | N/A                                                            |
+| **Debian Stretch** | `py2.7-stretch` `py2-stretch` `py2.7` `py2` | `py3.6-stretch` `py3.6` | `py3.7-stretch` `py3-stretch` `stretch` `py3.7` `py3` `latest` |
 
 It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
 
