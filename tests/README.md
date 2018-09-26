@@ -16,5 +16,5 @@ A `setup.py` was added to install dependencies. An example [Django settings file
 To build the example site Docker image and run tests on it, use commands like this:
 ```
 docker build --tag mysite --build-arg VARIANT=py2-stretch --build-arg PROJECT=django1 .
-python test.py mysite
+pytest test.py --django-bootstrap-image=mysite
 ```
