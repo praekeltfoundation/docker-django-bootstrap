@@ -1,4 +1,4 @@
-git+https://github.com/praekeltfoundation/seaworthy@9002b3b0560aba851dd7f6dc9a7c68712592dd5a
+seaworthy >= 0.3.1
 iso8601
 pytest >= 3.3
 testtools
