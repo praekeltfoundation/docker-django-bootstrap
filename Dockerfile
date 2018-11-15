@@ -24,7 +24,7 @@ RUN set -ex; \
     "; \
     apt-get-install.sh $fetchDeps; \
     wget https://nginx.org/keys/nginx_signing.key; \
-    [ "$(gpg -q --with-fingerprint --with-colons nginx_signing.key | awk -F: '/^fpr:/ { print $10 }')" \
+    [ "$(gpg --batch -q --with-fingerprint --with-colons nginx_signing.key | awk -F: '/^fpr:/ { print $10 }')" \
         = $NGINX_GPG_KEY ]; \
     apt-key add nginx_signing.key; \
     codename="$(. /etc/os-release; echo $VERSION | grep -oE [a-z]+)"; \
