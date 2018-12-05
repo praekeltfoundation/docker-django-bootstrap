@@ -18,6 +18,7 @@ For more background on running Django in Docker containers, see [this talk](http
    - [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
    - [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
    - [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
+   - [Specifying Gunicorn arguments](#specifying-gunicorn-arguments)
    - [Running other commands](#running-other-commands)
 2. [Celery](#celery)
    - [Option 1: Celery containers](#option-1-celery-containers)
@@ -112,6 +113,22 @@ As a general rule, you should list all the files in your `.gitignore` in your `.
 Additionally, you shouldn't need any *Git* stuff inside your Docker image. It's especially important to have Docker ignore the `.git` directory because every Git operation you perform will result in files changing in that directory (whether you end up in the same state in Git as you were previously or not). This could result in unnecessary invalidation of Docker's cached image layers.
 
 **NOTE:** Unlike `.gitignore` files, `.dockerignore` files do *not* apply recursively to subdirectories. So, for example, while the entry `*.pyc` in a `.gitignore` file will cause Git to ignore `./abc.pyc` and `./def/ghi.pyc`, in a `.dockerignore` file, that entry will cause Docker to ignore only `./abc.pyc`. This is very unfortunate. In order to get the same behaviour from a `.dockerignore` file, you need to add an extra leading `**/` glob pattern — i.e. `**/*.pyc`. For more information on the `.dockerignore` file syntax, see the [Docker documentation](https://docs.docker.com/engine/reference/builder/#dockerignore-file).
+
+### Specifying Gunicorn arguments
+The recommended way to specify additional Gunicorn arguments is by using the `CMD` directive in your Dockerfile:
+```dockerfile
+CMD ["my_django_project.wsgi:application", "--timeout", "1800"]
+```
+Alternatively, this can also be done at runtime:
+```
+> $ docker run my-django-bootstrap-image my_django_project.wsgi:application --timeout 1800
+```
+
+Note that, since Gunicorn 19.7.0, the `GUNICORN_CMD_ARGS` environment variable can also be used to specify arguments, but it's **not recommended** that you use it because the variable is already used by this image to set some basic options for Gunicorn. If you really need to specify arguments using that variable you can do so like:
+```dockerfile
+ENV GUNICORN_CMD_ARGS "$GUNICORN_CMD_ARGS --timeout 1800"
+```
+Arguments specified via the CLI (i.e. `CMD`) will take precedence over arguments specified via this environment variable.
 
 ### Running other commands
 You can skip the execution of the `django-entrypoint.sh` script bootstrapping processes and run other commands by overriding the container's launch command.
