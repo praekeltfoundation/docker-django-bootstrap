@@ -42,10 +42,19 @@ COPY nginx/ /etc/nginx/
 COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
+# Set some sensible Gunicorn options, needed for things to work with Nginx.
+# GUNICORN_CMD_ARGS is available in Gunicorn 19.7.0+ and CLI args will take
+# precedence over it.
+ENV GUNICORN_CMD_ARGS "\
+    --pid /var/run/gunicorn/gunicorn.pid \
+    --bind unix:/var/run/gunicorn/gunicorn.sock \
+    --umask 0117"
+
 EXPOSE 8000
 WORKDIR /app
 
 COPY django-entrypoint.sh celery-entrypoint.sh \
     /scripts/
+
 ENTRYPOINT ["tini", "--", "django-entrypoint.sh"]
 CMD []
