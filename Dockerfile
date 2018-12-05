@@ -8,8 +8,8 @@ RUN set -ex; \
     addgroup --system --gid 107 django; \
     adduser --system --uid 104 --ingroup django django; \
     \
-    mkdir /var/run/gunicorn /var/run/celery; \
-    chown django:django /var/run/gunicorn /var/run/celery
+    mkdir /run/gunicorn /run/celery; \
+    chown django:django /run/gunicorn /run/celery
 
 # Install libpq for psycopg2 for PostgreSQL support
  RUN apt-get-install.sh libpq5
@@ -46,8 +46,8 @@ RUN pip install -r /requirements.txt
 # GUNICORN_CMD_ARGS is available in Gunicorn 19.7.0+ and CLI args will take
 # precedence over it.
 ENV GUNICORN_CMD_ARGS "\
-    --pid /var/run/gunicorn/gunicorn.pid \
-    --bind unix:/var/run/gunicorn/gunicorn.sock \
+    --pid /run/gunicorn/gunicorn.pid \
+    --bind unix:/run/gunicorn/gunicorn.sock \
     --umask 0117"
 
 EXPOSE 8000

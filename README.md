@@ -298,7 +298,7 @@ This is a direction we want to take the project, but currently our infrastructur
 ### Gunicorn
 Gunicorn is run with some basic configuration:
 * Starts workers under the `django` user and group
-* Listens on a Unix socket at `/var/run/gunicorn/gunicorn.sock`
+* Listens on a Unix socket at `/run/gunicorn/gunicorn.sock`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
 
 Extra settings can be provided by overriding the `CMD` instruction to pass extra parameters to the entrypoint script. For example:
