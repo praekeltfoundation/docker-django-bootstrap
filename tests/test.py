@@ -196,6 +196,21 @@ class TestWeb(object):
         assert_that(response.text,
                     Contains('<title>Log in | Django site admin</title>'))
 
+    def test_prometheus_metrics_live(self, web_container):
+        """
+        When we get the /metrics path, we should receive Prometheus metrics.
+        """
+        web_client = web_container.http_client()
+        response = web_client.get('/metrics')
+
+        assert_that(response.headers['Content-Type'],
+                    Equals('text/plain; version=0.0.4; charset=utf-8'))
+        assert_that(response.text, Contains(
+            ('django_http_requests_total_by_view_transport_method_total{'
+             'method="GET",transport="http",view="prometheus-django-metrics"'
+             '} 1.0')
+        ))
+
     def test_nginx_access_logs(self, web_container):
         """
         When a request has been made to the container, Nginx logs access logs
