@@ -1,6 +1,9 @@
 import os
+import time
 
 import pytest
+
+import requests
 
 from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
@@ -15,12 +18,18 @@ DEFAULT_WAIT_TIMEOUT = int(os.environ.get('DEFAULT_WAIT_TIMEOUT', '30'))
 
 db_container = PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT)
 
-
 amqp_container = RabbitMQContainer(
     vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT)
 
+default_env = env = {
+    'SECRET_KEY': 'secret',
+    'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
+    'CELERY_BROKER_URL': amqp_container.broker_url(),
+    'DATABASE_URL': db_container.database_url(),
+}
 
-class DjangoBootstrapContainer(ContainerDefinition):
+
+class GunicornContainer(ContainerDefinition):
     WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
 
     def list_processes(self):
@@ -32,16 +41,19 @@ class DjangoBootstrapContainer(ContainerDefinition):
     def exec_find(self, params):
         return self.exec_run(['find'] + params)
 
+    def wait_for_start(self):
+        # Override wait_for_start to wait for the health check to succeed.
+        # Still wait for log lines to match because we also need to wait for
+        # Celery to start in the single-container setup.
+        start = time.monotonic()
+        super().wait_for_start()
+
+        remaining = self.wait_timeout - (time.monotonic() - start)
+        wait_for_healthcheck(self.http_client(), remaining)
+
     @classmethod
-    def for_fixture(
-            cls, name, wait_lines, command=None, env_extra={},
-            publish_port=True, wait_timeout=None):
-        env = {
-            'SECRET_KEY': 'secret',
-            'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
-            'CELERY_BROKER_URL': amqp_container.broker_url(),
-            'DATABASE_URL': db_container.database_url(),
-        }
+    def for_fixture(cls, name, wait_lines, command=None, env_extra={}):
+        env = dict(default_env)
         env.update(env_extra)
         kwargs = {
             'command': command,
@@ -50,11 +62,10 @@ class DjangoBootstrapContainer(ContainerDefinition):
             # the directory is set. Normally a proper volume would be mounted
             # but the effect is the same.
             'tmpfs': {'/app/media': 'uid=0'},
+            'ports': {'8000/tcp': ('127.0.0.1',)}
         }
-        if publish_port:
-            kwargs['ports'] = {'8000/tcp': ('127.0.0.1',)}
 
-        return cls(name, DDB_IMAGE, wait_lines, wait_timeout, kwargs)
+        return cls(name, DDB_IMAGE, wait_lines, create_kwargs=kwargs)
 
     def pytest_fixture(self, name):
         return super().pytest_fixture(
@@ -65,23 +76,33 @@ class DjangoBootstrapContainer(ContainerDefinition):
         return cls.for_fixture(name, *args, **kw).pytest_fixture(fixture_name)
 
 
-single_container = DjangoBootstrapContainer.for_fixture(
+class CeleryContainer(ContainerDefinition):
+    WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
+
+    def list_processes(self):
+        return list_container_processes(self.inner())
+
+    @classmethod
+    def for_fixture(cls, celery_command, wait_lines):
+        kwargs = {
+            'command': ['celery', celery_command],
+            'environment': default_env,
+        }
+        return cls(celery_command, DDB_IMAGE, wait_lines, create_kwargs=kwargs)
+
+
+single_container = GunicornContainer.for_fixture(
     'web', [r'Booting worker', r'celery@\w+ ready', r'beat: Starting\.\.\.'],
     env_extra={'CELERY_WORKER': '1', 'CELERY_BEAT': '1'})
 
 
-web_container = DjangoBootstrapContainer.for_fixture(
-    'web', [r'Booting worker'])
+web_container = GunicornContainer.for_fixture('web', [r'Booting worker'])
 
 
-worker_container = DjangoBootstrapContainer.for_fixture(
-    'worker', [r'celery@\w+ ready'],
-    command=['celery', 'worker'], publish_port=False)
+worker_container = CeleryContainer.for_fixture('worker', [r'celery@\w+ ready'])
 
 
-beat_container = DjangoBootstrapContainer.for_fixture(
-    'beat', [r'beat: Starting\.\.\.'],
-    command=['celery', 'beat'], publish_port=False)
+beat_container = CeleryContainer.for_fixture('beat', [r'beat: Starting\.\.\.'])
 
 
 def make_combined_fixture(base):
@@ -97,3 +118,35 @@ def make_combined_fixture(base):
         yield request.getfixturevalue(request.param)
 
     return containers
+
+
+def wait_for_healthcheck(client, timeout, path='/health/'):
+    """
+    A slightly modified versions of ``seaworthy.client.wait_for_response`` that
+    checks that a health check returns a 200 status code.
+    https://github.com/praekeltfoundation/seaworthy/blob/0.4.0/seaworthy/client.py#L205-L233
+
+    FIXME 2018-12-06: Implement this in Seaworthy.
+    """
+    # We want time.monotonic on Pythons that have it, otherwise time.time will
+    # have to do.
+    get_time = getattr(time, 'monotonic', time.time)
+
+    deadline = get_time() + timeout
+    while True:
+        try:
+            time_left = deadline - get_time()
+            response = client.get(
+                path, timeout=max(time_left, 0.001), allow_redirects=False)
+
+            if response.status_code == 200:
+                return
+        except requests.exceptions.Timeout:
+            # Requests timed out, our time must be up
+            break
+        except Exception:
+            if get_time() >= deadline:
+                break
+            time.sleep(0.1)
+
+    raise TimeoutError('Timeout waiting for HTTP response.')

@@ -77,6 +77,9 @@ LOGGING = {
 # Django settings:
 # http://docs.celeryproject.org/en/latest/django/first-steps-with-django.html
 CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='amqp://')
+# django-health-check's Celery health check requires a result backend to be
+# configured.
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 # *** This line is important! We want the worker concurrency to default to 1.
 # If we don't do this it will default to the number of CPUs on the particular
 # machine that we run the container on, which means unpredictable resource

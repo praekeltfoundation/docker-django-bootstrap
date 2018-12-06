@@ -38,6 +38,11 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'compressor',
+    'health_check',
+    # These more in-depth checks could be used in real-life but in our tests
+    # they get in the way when we're testing edge cases.
+    # 'health_check.db',
+    # 'health_check.contrib.celery',
 ]
 
 MIDDLEWARE = [
