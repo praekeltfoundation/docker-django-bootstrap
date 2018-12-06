@@ -9,7 +9,7 @@ import iso8601
 import pytest
 from seaworthy.ps import build_process_tree
 from seaworthy.testtools import MatchesPsTree
-from seaworthy.logs import output_lines
+from seaworthy.utils import output_lines
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,

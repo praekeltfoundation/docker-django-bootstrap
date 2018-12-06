@@ -6,7 +6,7 @@ from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
 from seaworthy.containers.rabbitmq import RabbitMQContainer
 from seaworthy.ps import list_container_processes
-from seaworthy.logs import output_lines
+from seaworthy.utils import output_lines
 
 
 DDB_IMAGE = pytest.config.getoption('--django-bootstrap-image')
