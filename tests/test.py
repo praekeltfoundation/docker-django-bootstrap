@@ -271,7 +271,7 @@ class TestWeb(object):
         """
         hashed_svg = web_container.exec_find(
             ['static/admin/img', '-regextype', 'posix-egrep', '-regex',
-             '.*\.[a-f0-9]{12}\.svg$'])
+             r'.*\.[a-f0-9]{12}\.svg$'])
         test_file = hashed_svg[0]
 
         web_client = web_container.http_client()
