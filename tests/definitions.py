@@ -5,6 +5,7 @@ import pytest
 
 import requests
 
+from seaworthy.client import wait_for_response
 from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
 from seaworthy.containers.rabbitmq import RabbitMQContainer
@@ -49,7 +50,8 @@ class GunicornContainer(ContainerDefinition):
         super().wait_for_start()
 
         remaining = self.wait_timeout - (time.monotonic() - start)
-        wait_for_healthcheck(self.http_client(), remaining)
+        wait_for_response(self.http_client(), remaining, path='/health/',
+                          expected_status_code=200)
 
     @classmethod
     def for_fixture(cls, name, wait_lines, command=None, env_extra={}):
@@ -118,35 +120,3 @@ def make_combined_fixture(base):
         yield request.getfixturevalue(request.param)
 
     return containers
-
-
-def wait_for_healthcheck(client, timeout, path='/health/'):
-    """
-    A slightly modified versions of ``seaworthy.client.wait_for_response`` that
-    checks that a health check returns a 200 status code.
-    https://github.com/praekeltfoundation/seaworthy/blob/0.4.0/seaworthy/client.py#L205-L233
-
-    FIXME 2018-12-06: Implement this in Seaworthy.
-    """
-    # We want time.monotonic on Pythons that have it, otherwise time.time will
-    # have to do.
-    get_time = getattr(time, 'monotonic', time.time)
-
-    deadline = get_time() + timeout
-    while True:
-        try:
-            time_left = deadline - get_time()
-            response = client.get(
-                path, timeout=max(time_left, 0.001), allow_redirects=False)
-
-            if response.status_code == 200:
-                return
-        except requests.exceptions.Timeout:
-            # Requests timed out, our time must be up
-            break
-        except Exception:
-            if get_time() >= deadline:
-                break
-            time.sleep(0.1)
-
-    raise TimeoutError('Timeout waiting for HTTP response.')
