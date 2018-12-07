@@ -4,9 +4,9 @@ import time
 import pytest
 
 from seaworthy.client import wait_for_response
-from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
 from seaworthy.containers.rabbitmq import RabbitMQContainer
+from seaworthy.definitions import ContainerDefinition
 from seaworthy.ps import list_container_processes
 from seaworthy.utils import output_lines
 

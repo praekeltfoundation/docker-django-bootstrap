@@ -5,3 +5,6 @@ testtools
 # FIXME: Temp workaround for dependency conflict between requests 2.20.1/idna 2.8
 # https://github.com/requests/requests/pull/4889
 idna < 2.8
+
+flake8
+flake8-import-order
