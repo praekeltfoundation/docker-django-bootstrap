@@ -3,8 +3,6 @@ import time
 
 import pytest
 
-import requests
-
 from seaworthy.client import wait_for_response
 from seaworthy.definitions import ContainerDefinition
 from seaworthy.containers.postgresql import PostgreSQLContainer
