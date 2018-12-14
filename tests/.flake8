@@ -1,0 +1,4 @@
+[flake8]
+# `django-admin startproject` generates some files with lines longer than 80
+# characters...let's just let it do that.
+max-line-length = 100

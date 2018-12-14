@@ -25,13 +25,15 @@ For more background on running Django in Docker containers, see [this talk](http
    - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
    - [Celery environment variable configuration](#celery-environment-variable-configuration)
 3. [Choosing an image tag](#choosing-an-image-tag)
-4. [Frequently asked questions](#frequently-asked-questions)
+4. [Monitoring and metrics](#monitoring-and-metrics)
+   - [Health checks](#health-checks)
+5. [Frequently asked questions](#frequently-asked-questions)
    - [How is this deployed?](#how-is-this-deployed)
    - [Why is Nginx needed?](#why-is-nginx-needed)
    - [What about WhiteNoise?](#what-about-whitenoise)
    - [What about Gunicorn's async workers?](#what-about-gunicorns-async-workers)
    - [What about Django Channels?](#what-about-django-channels)
-5. [Other configuration](#other-configuration)
+6. [Other configuration](#other-configuration)
    - [Gunicorn](#gunicorn)
    - [Nginx](#nginx)
 
@@ -242,6 +244,19 @@ The following tags are available:
 | **Debian Stretch** | `py2.7-stretch` `py2-stretch` `py2.7` `py2` | `py3.6-stretch` `py3.6` | `py3.7-stretch` `py3-stretch` `stretch` `py3.7` `py3` `latest` |
 
 It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
+
+## Monitoring and metrics
+django-bootstrap doesn't implement or mandate any particular monitoring or metrics setup, but we can suggest some ways to go about instrumenting a container based on django-bootstrap.
+
+### Health checks
+Health checks are important to implement when using an automated container orchestration system like Kubernetes or DC/OS. Health checks can allow these systems to wait for a container to become completely ready before routing user requests to the container. Containers can also be restarted if their health checks start failing.
+
+There are a few popular libraries available for implementing health checks in Django, such as:
+* [`django-health-check`](https://github.com/KristianOellegaard/django-health-check)
+* [`django-watchman`](https://github.com/mwarkentin/django-watchman)
+* [`django-healthchecks`](https://github.com/mvantellingen/django-healthchecks)
+
+The [example Django projects](tests) we use to test `django-bootstrap` use a very basic configuration of [`django-health-check`](https://github.com/KristianOellegaard/django-health-check). Health checks can also be implemented from scratch in Django quite easily.
 
 ## Frequently asked questions
 ### How is this deployed?

@@ -6,17 +6,20 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import iso8601
+
 import pytest
+
 from seaworthy.ps import build_process_tree
 from seaworthy.testtools import MatchesPsTree
-from seaworthy.logs import output_lines
+from seaworthy.utils import output_lines
+
 from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
     MatchesRegex, MatchesSetwise, Not)
 
-from definitions import (
+from definitions import (  # noqa: I100,I101
     # dependencies
     amqp_container, db_container,
     # our definitions
