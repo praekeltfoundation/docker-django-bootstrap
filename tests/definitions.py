@@ -40,6 +40,11 @@ class GunicornContainer(ContainerDefinition):
     def exec_find(self, params):
         return self.exec_run(['find'] + params)
 
+    def django_maj_version(self):
+        [version] = self.exec_run(
+            ['python', '-c', 'import django; print(django.__version__)'])
+        return int(version.split('.')[0])
+
     def wait_for_start(self):
         # Override wait_for_start to wait for the health check to succeed.
         # Still wait for log lines to match because we also need to wait for

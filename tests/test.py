@@ -186,15 +186,18 @@ class TestWeb(object):
 
         django_container.set_helper(docker_helper)
         with django_container.setup(environment={'SKIP_MIGRATIONS': '1'}):
-            # Check if this is Django 1 or 2, as the two behave differently
-            [version] = django_container.exec_run(
-                ['python', '-c', 'import django; print(django.__version__)'])
-            if int(version.split('.')[0]) >= 2:
-                expected_tables = []
+            if django_container.django_maj_version() >= 2:
+                assert_that(public_tables(db_container), Equals([]))
             else:
-                expected_tables = ['django_migrations']
-
-            assert_that(public_tables(db_container), Equals(expected_tables))
+                # On Django 1, if our app has any models (and the
+                # django-prometheus package adds one), then an empty table
+                # called "django_migrations" is created, even if migrations
+                # aren't run.
+                assert_that(
+                    public_tables(db_container), Equals(['django_migrations']))
+                [count] = output_lines(db_container.exec_psql(
+                    'SELECT COUNT(*) FROM django_migrations;'))
+                assert_that(int(count), Equals(0))
 
     def test_admin_site_live(self, web_container):
         """
