@@ -47,7 +47,7 @@ if [ "$1" = 'celery' ]; then
   # Celery by default writes files like pidfiles and the beat schedule file to
   # the current working directory. Change to the Celery working directory so
   # that these files end up there.
-  cd /var/run/celery
+  cd /run/celery
 fi
 
 exec "$@"
