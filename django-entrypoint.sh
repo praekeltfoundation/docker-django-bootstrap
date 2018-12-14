@@ -1,9 +1,8 @@
 #!/usr/bin/env sh
 set -e
 
-# No args or looks like options or the APP_MODULE for Gunicorn
-if [ "$#" = 0 ] || \
-    [ "${1#-}" != "$1" ] || \
+# Looks like options or the APP_MODULE for Gunicorn
+if [ "${1#-}" != "$1" ] || \
     echo "$1" | grep -Eq '^([_A-Za-z]\w*\.)*[_A-Za-z]\w*:[_A-Za-z]\w*$'; then
   set -- gunicorn "$@"
 fi
@@ -55,12 +54,6 @@ if not User.objects.filter(username='admin').exists():
   if [ -n "$CELERY_BEAT" ]; then
     ensure_celery_app
     celery-entrypoint.sh beat --pidfile beat.pid &
-  fi
-
-  if [ -n "$APP_MODULE" ]; then
-    echo 'DEPRECATED: Providing APP_MODULE via an environment variable is deprecated.
-            Please provide it using the container command rather.' 1>&2
-    set -- "$@" "$APP_MODULE"
   fi
 
   # Set some sensible Gunicorn options, needed for things to work with Nginx
