@@ -167,11 +167,8 @@ class TestWeb(object):
         When the web container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
         """
-        assert_that(public_tables(db_container), Equals([]))
-
-        web_container.set_helper(docker_helper)
-        with web_container.setup(environment={'SKIP_MIGRATIONS': '1'}):
-            assert_that(public_tables(db_container), Equals([]))
+        self._test_database_tables_not_created(
+            docker_helper, db_container, web_container)
 
     @pytest.mark.clean_db_container
     def test_database_tables_not_created_single(
@@ -180,11 +177,24 @@ class TestWeb(object):
         When the single container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
         """
+        self._test_database_tables_not_created(
+            docker_helper, db_container, single_container)
+
+    def _test_database_tables_not_created(
+            self, docker_helper, db_container, django_container):
         assert_that(public_tables(db_container), Equals([]))
 
-        single_container.set_helper(docker_helper)
-        with single_container.setup(environment={'SKIP_MIGRATIONS': '1'}):
-            assert_that(public_tables(db_container), Equals([]))
+        django_container.set_helper(docker_helper)
+        with django_container.setup(environment={'SKIP_MIGRATIONS': '1'}):
+            # Check if this is Django 1 or 2, as the two behave differently
+            [version] = django_container.exec_run(
+                ['python', '-c', 'import django; print(django.__version__)'])
+            if int(version.split('.')[0]) >= 2:
+                expected_tables = []
+            else:
+                expected_tables = ['django_migrations']
+
+            assert_that(public_tables(db_container), Equals(expected_tables))
 
     def test_admin_site_live(self, web_container):
         """
