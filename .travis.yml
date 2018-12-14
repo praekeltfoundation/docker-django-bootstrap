@@ -33,7 +33,7 @@ script:
   - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION-$VARIANT" --tag "$image" .
   - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" --build-arg PROJECT="$TEST_PROJECT" tests
   - pytest -v tests/test.py --django-bootstrap-image="mysite:$tag"
-  - flake8 tests gunicorn_conf.py
+  - flake8 gunicorn_conf.py && flake8 tests
 
 after_script:
   - docker images
