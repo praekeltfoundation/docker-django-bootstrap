@@ -32,11 +32,11 @@ DATABASES = {
 # Set up static file storage as described in the README
 STATIC_ROOT = '/app/static'
 STATIC_URL = '/static/'
-# Using CachedStaticFilesStorage results in a larger Docker image but means
+# Using ManifestStaticFilesStorage results in a larger Docker image but means
 # that Nginx can set long 'expires' headers for the files.
 # https://github.com/praekeltfoundation/docker-django-bootstrap/pull/11
 STATICFILES_STORAGE = (
-    'django.contrib.staticfiles.storage.CachedStaticFilesStorage')
+    'django.contrib.staticfiles.storage.ManifestStaticFilesStorage')
 
 MEDIA_ROOT = '/app/media'
 MEDIA_URL = '/media/'
@@ -77,6 +77,9 @@ LOGGING = {
 # Django settings:
 # http://docs.celeryproject.org/en/latest/django/first-steps-with-django.html
 CELERY_BROKER_URL = env.str('CELERY_BROKER_URL', default='amqp://')
+# django-health-check's Celery health check requires a result backend to be
+# configured.
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 # *** This line is important! We want the worker concurrency to default to 1.
 # If we don't do this it will default to the number of CPUs on the particular
 # machine that we run the container on, which means unpredictable resource

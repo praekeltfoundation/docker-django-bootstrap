@@ -1,42 +1,49 @@
 sudo: required
-services:
-  - docker
+group: trusty_latest
+services: docker
 language: python
+python: '3.6'
+
+# Only build develop. PRs still get built. If/when versioning is added, more
+# branches could need to be built.
+branches:
+  only:
+    - develop
 
 env:
   global:
+    - IMAGE_USER=praekeltfoundation
     - REGISTRY_USER=praekeltorgdeploy
     - secure: "UK7h5cBSPlsL1bPJx+S7ArYKHIUjEWfsITw8M/ObTLaIQHMq2uV3J/D7K5GFkqJFX9sUGmFZBkCu1J9JwpieO1Ew79B2/g4i0aDDmhIuE+IOo5tQ6jinAmP1NEVrCvk1LUTdXwk46VbUCGNxYpv44ge1zwhRrtNpMxaIqXsSYLOXjA7p7A/IghDRYDsRIjz6TfXNKcw+qWxzUTSUjLqgcZqezvI3c9VRRgD94vKh9KpLryVtSPxGjUQTKD6cfu6Yvbz6TzVGp6QCEM9ysRdRJx0ecsP39XBj8VVnqI34ux+4sqiwdqM7SQTlaKFJK+o6dMAX5ZEkA9jQw2kWDX0Pg60zHX+vbH1vycPVaQ6ln9J68pNZx6AMFbJpDkTacrmStH9uIuH6+pN4j4gNsT4TkwtFJDcRuGI0gShqBgQVVHhGuCECfj6RZQ7K35NsQVHXQy47AkwGODu3xUwAuiMOeQVR2rEYCBnJfx+qLY5hIsPzR4MhidLPSZa5T520uhp+35pVAk95DYYEL+6N2C3wIOmtEl6gZNC1P0IgCDuTOU/u5+TCaS5C7M3aWk26SL+n3JnFeCAgLr+OYntHwW9PIen70OG1bokGdxQZ00DvF9veyQz+6IGVEG1Cm5MZv6Cp9bqgpGYMRhKBEAJyKrT+slt6ah10+eIJbT7p4HIgKBM="
-    - DEFAULT_VARIANT=py2
   matrix:
-    - VARIANT=py2
-    - VARIANT=py3
+    - PYTHON_VERSION=2.7 VARIANT=jessie  TEST_PROJECT=django1 VERSION_LATEST=  TAG_LATEST=
+    - PYTHON_VERSION=2.7 VARIANT=stretch TEST_PROJECT=django1 VERSION_LATEST=  TAG_LATEST=1
+    - PYTHON_VERSION=3.6 VARIANT=jessie  TEST_PROJECT=django1 VERSION_LATEST=  TAG_LATEST=  SEMVER_PRECISION=2
+    - PYTHON_VERSION=3.6 VARIANT=stretch TEST_PROJECT=django1 VERSION_LATEST=  TAG_LATEST=1 SEMVER_PRECISION=2
+    - PYTHON_VERSION=3.7 VARIANT=stretch TEST_PROJECT=django2 VERSION_LATEST=1 TAG_LATEST=1
 
-# Update Docker Engine and Compose
-before_install:
-  - sudo apt-get update
-  - sudo apt-get install -qy -o Dpkg::Options::="--force-confold" docker-engine
-  - pip install --upgrade docker-compose
-install: []
+install:
+  - pip install -r tests/requirements.txt
 
 before_script:
-  - image="praekeltfoundation/django-bootstrap:$VARIANT"
-  - dockerfile="$VARIANT.dockerfile"
+  - tag="py$PYTHON_VERSION-$VARIANT"
+  - image="$IMAGE_USER/django-bootstrap:$tag"
   # Fetch existing image to use as cache
-  - docker pull "$image"-onbuild
+  - docker pull "$image" || true
 script:
-  - docker build --pull --cache-from "$image"-onbuild --tag "$image" --file "$dockerfile" .
-  - docker build --cache-from "$image"-onbuild --tag "$image"-onbuild --file onbuild/"$dockerfile" .
-  - (cd example && ./test.sh)
-  - (cd example && ./test.sh --single-container)
+  - docker build --pull --cache-from "$image" --build-arg PYTHON_VERSION="$PYTHON_VERSION-$VARIANT" --tag "$image" .
+  - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" --build-arg PROJECT="$TEST_PROJECT" tests
+  - pytest -v tests/test.py --django-bootstrap-image="mysite:$tag"
+  - flake8 tests
 
 after_script:
   - docker images
 
 before_deploy:
-  - docker login -u "$REGISTRY_USER" -p "$REGISTRY_PASS"
+  - pip install docker-ci-deploy==0.3.0
+  - echo "$REGISTRY_PASS" | docker login -u "$REGISTRY_USER" --password-stdin
 deploy:
   provider: script
-  script: ./deploy.sh "$image" "$image-onbuild" --default "$DEFAULT_VARIANT"
+  script: dcd -t "$VARIANT" ${TAG_LATEST:+latest} -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
   on:
     branch: develop

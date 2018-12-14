@@ -1,14 +1,40 @@
 # docker-django-bootstrap
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/praekeltfoundation/django-bootstrap.svg?style=flat-square)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
-[![Travis branch](https://img.shields.io/travis/praekeltfoundation/docker-django-bootstrap/develop.svg?style=flat-square)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
-[![Requires.io](https://img.shields.io/requires/github/praekeltfoundation/docker-django-bootstrap.svg?style=flat-square)](https://requires.io/github/praekeltfoundation/docker-django-bootstrap/requirements/?branch=develop)
+[![Docker Pulls](https://flat.badgen.net/docker/pulls/praekeltfoundation/django-bootstrap)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
+[![Travis branch](https://flat.badgen.net/travis/praekeltfoundation/docker-django-bootstrap/develop)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
 
 Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
-> **Note**: The tags for these images have changed recently. We've dropped support for Alpine Linux and going forward all images will be Debian-based. In addition, we've added Python 3 support. Whereas before there were `:debian` and `:alpine` tags there are now `:py2` and `:py3` Debian-based tags. The default tags (`:latest` and `:onbuild`) will remain Debian/Python 2-based as they have always been.
+Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
+
+> **NOTE:** The `latest`/shorter form tags now track the latest Python and Debian releases. The latest/shorter tags for these images originally pointed to Debian Jessie and Python 2.7 images. This has been updated to match the behaviour of the upstream image tags. You should generally use the most specific tag that you need, for example `py3.6-stretch`.
+
+For more background on running Django in Docker containers, see [this talk](https://www.youtube.com/watch?v=T2hooQzvurQ) ([slides](https://speakerdeck.com/jayh5/deploying-django-web-applications-in-docker-containers)) from PyConZA 2017.
+
+## Index
+1. [Usage](#usage)
+   - [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
+   - [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
+   - [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
+   - [Running other commands](#running-other-commands)
+2. [Celery](#celery)
+   - [Option 1: Celery containers](#option-1-celery-containers)
+   - [Option 2: Celery in the same container](#option-2-celery-in-the-same-container)
+   - [Celery environment variable configuration](#celery-environment-variable-configuration)
+3. [Choosing an image tag](#choosing-an-image-tag)
+4. [Monitoring and metrics](#monitoring-and-metrics)
+   - [Health checks](#health-checks)
+5. [Frequently asked questions](#frequently-asked-questions)
+   - [How is this deployed?](#how-is-this-deployed)
+   - [Why is Nginx needed?](#why-is-nginx-needed)
+   - [What about WhiteNoise?](#what-about-whitenoise)
+   - [What about Gunicorn's async workers?](#what-about-gunicorns-async-workers)
+   - [What about Django Channels?](#what-about-django-channels)
+6. [Other configuration](#other-configuration)
+   - [Gunicorn](#gunicorn)
+   - [Nginx](#nginx)
 
 ## Usage
 #### Step 1: Get your Django project in shape
@@ -41,41 +67,47 @@ If your project makes use of user-uploaded media files, it must be set up as fol
 ***Note:*** Any files stored in directories called `static`, `staticfiles`, `media`, or `mediafiles` in the project root directory (`/app`) will be served by Nginx. Do not store anything here that you do not want the world to see.
 
 **Django settings file**
-You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](example/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
+You'll probably want to make your Django settings file *Docker-friendly* so that the app is easier to deploy on container-based infrastructure. There are a lot of ways to do this and many project-specific considerations, but the [settings file](tests/django2/mysite/docker_settings.py) in the example project is a good place to start and has lots of documentation.
 
 #### Step 2: Write a Dockerfile
 In the root of the repo for your Django project, add a Dockerfile for the project. For example, this file could contain:
 ```dockerfile
-FROM praekeltfoundation/django-bootstrap:onbuild
+FROM praekeltfoundation/django-bootstrap
+
+COPY . /app
+RUN pip install -e .
+
 ENV DJANGO_SETTINGS_MODULE my_django_project.settings
 ENV CELERY_APP my_django_project
+
 RUN django-admin collectstatic --noinput
+
 CMD ["my_django_project.wsgi:application"]
 ```
 
 Let's go through these lines one-by-one:
- 1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap:onbuild` base image.
- 2. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
- 3. *Optional:* If you are using Celery, setting the `CELERY_APP` environment variable lets Celery know what app instance to use (i.e. you don't have to provide [`--app`](http://docs.celeryproject.org/en/latest/reference/celery.bin.celery.html#cmdoption-celery-a)).
- 4. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
- 5. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
+ 1. The `FROM` instruction here tells us which image to base this image on. We use the `django-bootstrap` base image.
+ 2. Copy the source (in the current working directory-- `.`) of your project into the image (`/app` in the container)
+ 3. Execute (`RUN`) a `pip` command inside the container to install your project from the source
+ 4. We set the `DJANGO_SETTINGS_MODULE` environment variable so that Django knows where to find its settings. This is necessary for any `django-admin` commands to work.
+ 5. *Optional:* If you are using Celery, setting the `CELERY_APP` environment variable lets Celery know what app instance to use (i.e. you don't have to provide [`--app`](http://docs.celeryproject.org/en/latest/reference/celery.bin.celery.html#cmdoption-celery-a)).
+ 6. *Optional:* If you need to run any build-time tasks, such as collecting static assets, now's the time to do that.
+ 7. We set the container command (`CMD`) to a list of arguments that will be passed to `gunicorn`. We need to provide Gunicorn with the [`APP_MODULE`](http://docs.gunicorn.org/en/stable/run.html?highlight=app_module#gunicorn), so that it knows which WSGI app to run.*
 
 > Note that previously the way to do point 5 was to set the `APP_MODULE` environment variable. This functionality has been removed.
-
-The `django-bootstrap:onbuild` base image does a few steps automatically using Docker's `ONBUILD` instruction. It will:
- 1. `COPY . /app` - copies the source of your project into the image
- 2. `RUN chown -R django:django /app` - ensures the `django` user can write to `/app` and its subdirectories
- 3. `RUN pip install -e .` - installs your project using `pip`
-All these instructions occur directly after the `FROM` instruction in your Dockerfile. Running these `ONBUILD` steps is *optional*. If you don't want them, you can use the plain `praekeltfoundation/django-bootstrap` image.
 
 By default, the [`django-entrypoint.sh`](django-entrypoint.sh) script is run when the container is started. This script runs a once-off `django-admin migrate` to update the database schemas and then launches `nginx` and `gunicorn` to run the application.
 
 The script also allows you to create a Django super user account if needed. Setting the `SUPERUSER_PASSWORD` environment variable will result in a Django superuser account being made with the `admin` username. This will only happen if no `admin` user exists.
 
-#### Step 3: Add a `.dockerignore` file (if using the `:onbuild` image)
-Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](example/.dockerignore) from the example Django project in this repo.
+By default the script will run the migrations when starting up. This may not be desirable in all situations. If you want to run migrations separately using `django-admin` then setting the `SKIP_MIGRATIONS` environment variable will result in them not being run.
 
-The `:onbuild` image automatically copies in the entire source of your project, but some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
+#### Step 3: Add a `.dockerignore` file (if copying in the project source)
+If you are copying the full source of your project into your Docker image (i.e. doing `COPY . /app`), then it is important to add a `.dockerignore` file.
+
+Add a file called `.dockerignore` to the root of your project. A good start is just to copy in the [`.dockerignore` file](tests/.dockerignore) from the example Django project in this repo.
+
+When copying in the source of your project, some of those files probably *aren't* needed inside the Docker image you're building. We tell Docker about those unneeded files using a `.dockerignore` file, much like how one would tell Git not to track files using a `.gitignore` file.
 
 As a general rule, you should list all the files in your `.gitignore` in your `.dockerignore` file. If you don't need it in Git, you shouldn't need it in Docker.
 
@@ -154,23 +186,111 @@ The following environment variables can be used to configure Celery, but, other 
 * Default: none
 * Celery option: `-A`/`--app`
 
-> **NOTE**: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.
+<details>
+  <summary>Deprecated environment variables</summary>
+  <blockquote><b>NOTE</b>: The following 3 environment variables are deprecated. They will continue to work for now but it is recommended that you set these values in your Django settings file rather.</blockquote>
 
-#### `CELERY_BROKER`:
-* Required: no
-* Default: none
-* Celery option: `-b`/`--broker`
+  <h4><code>CELERY_BROKER</code>:</h4>
+  <ul>
+    <li>Required: no</li>
+    <li>Default: none</li>
+    <li>Celery option: <code>-b</code>/<code>--broker</code></li>
+  </ul>
 
-#### `CELERY_LOGLEVEL`:
-* Required: no
-* Default: none
-* Celery option: `-l`/`--loglevel`
+  <h4><code>CELERY_LOGLEVEL</code>:</h4>
+  <ul>
+  <li>Required: no</li>
+  <li>Default: none</li>
+  <li>Celery option: <code>-l</code>/<code>--loglevel</code></li>
+  </ul>
 
-#### `CELERY_CONCURRENCY`:
-Note that by default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** here to ensure containers use a consistent and small amount of resources. If you need to run many worker processes, they should be in separate containers.
-* Required: no
-* Default: **1**
-* Celery option: `-c`/`--concurrency`
+  <h4><code>CELERY_CONCURRENCY</code>:</h4>
+  <ul>
+  <li>Required: no</li>
+  <li>Default: <b>1</b></li>
+  <li>Celery option: <code>-c</code>/<code>--concurrency</code></li>
+  </ul>
+
+</details>
+
+#### A note on worker processes
+By default Celery runs as many worker processes as there are processors. **We instead default to 1 worker process** in this image to ensure containers use a consistent and small amount of resources no matter what kind of host the containers happen to run on.
+
+If you need more Celery worker processes, you have the choice of either upping the processes per container or running multiple container instances.
+
+## Choosing an image tag
+The following tags are available:
+
+|                    | Python 2.7                                  | Python 3.6              | Python 3.7                                                     |
+|--------------------|---------------------------------------------|-------------------------|----------------------------------------------------------------|
+| **Debian Jessie**  | `py2.7-jessie` `py2-jessie` `jessie`        | `py3.6-jessie`          | N/A                                                            |
+| **Debian Stretch** | `py2.7-stretch` `py2-stretch` `py2.7` `py2` | `py3.6-stretch` `py3.6` | `py3.7-stretch` `py3-stretch` `stretch` `py3.7` `py3` `latest` |
+
+It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is Python 2.7 and the default operating system is Debian Jessie, but these are likely to change in the future.
+
+## Monitoring and metrics
+django-bootstrap doesn't implement or mandate any particular monitoring or metrics setup, but we can suggest some ways to go about instrumenting a container based on django-bootstrap.
+
+### Health checks
+Health checks are important to implement when using an automated container orchestration system like Kubernetes or DC/OS. Health checks can allow these systems to wait for a container to become completely ready before routing user requests to the container. Containers can also be restarted if their health checks start failing.
+
+There are a few popular libraries available for implementing health checks in Django, such as:
+* [`django-health-check`](https://github.com/KristianOellegaard/django-health-check)
+* [`django-watchman`](https://github.com/mwarkentin/django-watchman)
+* [`django-healthchecks`](https://github.com/mvantellingen/django-healthchecks)
+
+The [example Django projects](tests) we use to test `django-bootstrap` use a very basic configuration of [`django-health-check`](https://github.com/KristianOellegaard/django-health-check). Health checks can also be implemented from scratch in Django quite easily.
+
+## Frequently asked questions
+### How is this deployed?
+This will depend very much on your infrastructure. This Docker image was designed with an architecture like this in mind:
+
+<img src="images/architecture.svg" alt="Architecture diagram" width="480"/>
+
+django-bootstrap does not require that you use PostgreSQL or RabbitMQ. You can configure Django however you would like, those are just the systems we use with it.
+
+The image was also designed to be used with a container orchestration system. We use Mesosphere DC/OS but it should work just as well on Kubernetes. We run services that require persistent storage, such as databases or message brokers, outside of our container orchestration system. This looks something like this:
+
+<img src="images/containers.svg" alt="Container diagram" width="480px"/>
+
+Generally a single image based on django-bootstrap takes on the role of running Django or Celery depending on how each container running the image is configured.
+
+### Why is Nginx needed?
+The primary reason Nginx is necessary is that a key part of Gunicorn's design relies on a proxy to buffer incoming requests. This design goes back to the original [design of Unicorn for Ruby](https://bogomips.org/unicorn/DESIGN.html):
+> [...] neither keepalive nor pipelining are supported. These aren't needed since Unicorn is only designed to serve fast, low-latency clients directly. Do one thing, do it well; let nginx handle slow clients.
+
+You can also read about this in [Gunicorn's design documentation](http://docs.gunicorn.org/en/latest/design.html). So, when using Gunicorn (with the default "sync workers"), it's critical that a buffering proxy (such as Nginx) is used.
+
+In addition to this reason, Nginx is used to perform the following functions:
+* Serves static files for Django which it can do very efficiently, rather than requiring Python code to do so.
+* Performs some basic optimisations such as gzipping responses, setting some cache-control headers for static files, etc.
+* Adjusts some headers received by clients (see [Other configuration: Nginx](#nginx)).
+
+### What about WhiteNoise?
+[WhiteNoise](http://whitenoise.evans.io) is a library to simplify static file serving with Python webservers that integrates with Django. It encapsulates a lot of best-practices and useful optimisations when serving static files. In fact, some of the optimisations it uses we copied and used in the Nginx configuration for django-bootstrap.
+
+WhiteNoise is not typically used in conjunction with a static file-serving reverse proxy and so we don't recommend using it with django-bootstrap. Additionally, WhiteNoise [does not support serving Django media files](http://whitenoise.evans.io/en/stable/django.html#serving-media-files)--which is **not** a thing we recommend you do, for the reasons outlined in the WhiteNoise documentation--but a requirement we have had for some of our projects.
+
+WhiteNoise does not solve the problem of buffering requests for Gunicorn's workers.
+
+### What about Gunicorn's async workers?
+Gunicorn does provide various implementations of asynchronous workers. See [Choosing a Worker Type](http://docs.gunicorn.org/en/latest/design.html#choosing-a-worker-type). These asynchronous workers can work well with django-bootstrap.
+
+When using async workers, it could be more practical to use WhiteNoise without Nginx, but that is beyond the scope of this project.
+
+The sync worker type is simple, easy to reason about, and can scale well when deployed properly and used for its intended purpose.
+
+### What about Django Channels?
+[Django Channels](https://channels.readthedocs.io) extends Django for protocols beyond HTTP/1.1 and generally enables Django to be used for more asynchronous applications. Django Channels does not use WSGI and instead uses a protocol called [Asynchronous Server Gateway Interface (ASGI)](https://channels.readthedocs.io/en/latest/asgi.html). Gunicorn does not support ASGI and instead the reference ASGI server implementation, [Daphne](https://github.com/django/daphne/), is typically used instead.
+
+Django Channels is beyond the scope of this project. We may one day start a `docker-django-channels` project, though :wink:.
+
+### What about using container groups (i.e. pods)?
+django-bootstrap currently runs both Nginx and Gunicorn processes in the same container. It is generally considered best-practice to run only one thing inside a container. Technically, it would be possible to run Nginx and Gunicorn in separate containers that are grouped together and share some volumes. The idea of a "pod" of containers was popularised by Kubernetes. Containers in a pod are typically co-located, so sharing files between the containers is practical:
+
+<img src="images/pod.svg" alt="Pod diagram" width="480px"/>
+
+This is a direction we want to take the project, but currently our infrastructure does not support the pod pattern. We have experimented with this [before](https://github.com/praekeltfoundation/docker-django-bootstrap/pull/69) and would welcome pull requests.
 
 ## Other configuration
 ### Gunicorn
@@ -188,13 +308,19 @@ See all the settings available for gunicorn [here](http://docs.gunicorn.org/en/l
 
 ### Nginx
 Nginx is set up with mostly default config:
-* Access logs are sent to stdout, error logs to stderr and log messages are prefixed with `nginx: ` to differentiate them from Gunicorn log messages
+* Access logs are sent to stdout, error logs to stderr and log messages are formatted to be JSON-compatible for easy parsing.
 * Listens on port 8000 (and this port is exposed in the Dockerfile)
+* Has gzip compression enabled for most common, compressible mime types
 * Serves files from `/static/` and `/media/`
 * All other requests are proxied to the Gunicorn socket
 
-Generally you shouldn't need to adjust Nginx's settings. If you do, the configuration files of interest are at:
-* `/etc/nginx/nginx.conf`: Main configuration
-* `/etc/nginx/conf.d/django.conf`: Proxy configuration
+Generally you shouldn't need to adjust Nginx's settings. If you do, the configuration is split into several files that can be overridden individually:
+* `/etc/nginx/nginx.conf`: Main configuration (including logging and gzip compression)
+* `/etc/nginx/conf.d/`
+  * `django.conf`: The primary server configuration
+  * `django.conf.d/`
+    * `upstream.conf`: Upstream connection to Gunicorn
+    * `locations/*.conf`: Each server location (static, media, root)
+    * `maps/*.conf`: Nginx maps for setting variables
 
 We make a few adjustments to Nginx's default configuration to better work with Gunicorn. See the [config file](nginx/conf.d/django.conf) for all the details. One important point is that we consider the `X-Forwarded-Proto` header, when set to the value of `https`, as an indicator that the client connection was made over HTTPS and is secure. Gunicorn considers a few more headers for this purpose, `X-Forwarded-Protocol` and `X-Forwarded-Ssl`, but our Nginx config is set to remove those headers to prevent misuse.
