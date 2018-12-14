@@ -136,6 +136,8 @@ Or at runtime:
 ```
 Arguments specified via the CLI (i.e. `CMD`) will take precedence over arguments specified via this environment variable.
 
+See all the settings available for Gunicorn [here](http://docs.gunicorn.org/en/latest/settings.html). A common setting is the number of Gunicorn workers which can be set with the `WEB_CONCURRENCY` environment variable.
+
 Gunicorn can also be configured using a [configuration file](http://docs.gunicorn.org/en/latest/configure.html#configuration-file). We **do not recommend** this because django-bootstrap already uses a config file to set [some basic options for Gunicorn](#gunicorn). Note that the config file has the _lowest_ precedence of all the configuration methods so any option specified through either the CLI or the environment variable will override the same option in the config file.
 
 Gunicorn in this image is essentially hard-coded to use a config file at `/gunicorn_conf.py`. If you _must_ use your own config file, you could overwrite that file.
@@ -325,13 +327,6 @@ Gunicorn is run with some basic configuration using the config file at [`/gunico
 * Starts workers under the `django` user and group
 * Listens on a Unix socket at `/run/gunicorn/gunicorn.sock`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
-
-Extra settings can be provided by overriding the `CMD` instruction to pass extra parameters to the entrypoint script. For example:
-```dockerfile
-CMD ["my_django_project.wsgi:application", "--threads", "5", "--timeout", "50"]
-```
-
-See all the settings available for Gunicorn [here](http://docs.gunicorn.org/en/latest/settings.html). A common setting is the number of Gunicorn workers which can be set with the `WEB_CONCURRENCY` environment variable.
 
 ### Nginx
 Nginx is set up with mostly default config:
