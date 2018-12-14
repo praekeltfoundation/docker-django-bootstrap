@@ -42,6 +42,8 @@ COPY nginx/ /etc/nginx/
 COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
+COPY gunicorn_conf.py /gunicorn_conf.py
+
 EXPOSE 8000
 WORKDIR /app
 
