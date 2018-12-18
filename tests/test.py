@@ -207,8 +207,7 @@ class TestWeb(object):
         assert_that(len(public_tables(db_container)), GreaterThan(0))
 
     @pytest.mark.clean_db_container
-    def test_database_tables_not_created(
-            self, docker_helper, db_container, amqp_container):
+    def test_database_tables_not_created(self, docker_helper, db_container):
         """
         When the web container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
@@ -296,6 +295,46 @@ class TestWeb(object):
             'http_x_forwarded_proto': Equals(''),
             'http_x_forwarded_for': Equals(''),
         }))
+
+    def test_gunicorn_access_logs(self, docker_helper, db_container):
+        """
+        When the web container is running with the `GUNICORN_ACCESS_LOGS`
+        environment variable set, Gunicorn access logs should be output.
+        """
+        self._test_gunicorn_access_logs(docker_helper, web_container)
+
+    def test_gunicorn_access_logs_single(
+            self, docker_helper, db_container, amqp_container):
+        """
+        When the single container is running with the `GUNICORN_ACCESS_LOGS`
+        environment variable set, Gunicorn access logs should be output.
+        """
+        self._test_gunicorn_access_logs(docker_helper, single_container)
+
+    def _test_gunicorn_access_logs(self, docker_helper, web_container):
+        web_container.set_helper(docker_helper)
+        with web_container.setup(environment={'GUNICORN_ACCESS_LOGS': '1'}):
+            # Wait a little bit so that previous tests' requests have been
+            # written to the log.
+            time.sleep(0.2)
+            before_lines = output_lines(web_container.get_logs(stderr=False))
+
+            # Make a request to see the logs for it
+            web_client = web_container.http_client()
+            web_client.get('/')
+
+            # Wait a little bit so that our request has been written to the log.
+            time.sleep(0.2)
+            after_lines = output_lines(web_container.get_logs(stderr=False))
+
+            new_lines = after_lines[len(before_lines):]
+            assert_that(len(new_lines), GreaterThan(0))
+
+            # Find the Gunicorn log line (the not-Nginx-JSON line)
+            gunicorn_lines = [
+                l for l in new_lines if not re.match(r'^\{ .+', l)]
+            assert_that(gunicorn_lines, HasLength(1))
+            assert_that(gunicorn_lines[0], Contains('"GET / HTTP/1.0"'))
 
     def test_static_file(self, web_container):
         """
