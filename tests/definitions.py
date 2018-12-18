@@ -28,7 +28,7 @@ default_env = env = {
 }
 
 
-class GunicornContainer(ContainerDefinition):
+class _BaseContainerDefinition(ContainerDefinition):
     WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
 
     def list_processes(self):
@@ -40,11 +40,16 @@ class GunicornContainer(ContainerDefinition):
     def exec_find(self, params):
         return self.exec_run(['find'] + params)
 
+    def exec_stat(self, *paths, format='%a %U:%G'):
+        return self.exec_run(['stat'] + ['--format', format] + list(paths))
+
     def django_maj_version(self):
         [version] = self.exec_run(
             ['python', '-c', 'import django; print(django.__version__)'])
         return int(version.split('.')[0])
 
+
+class GunicornContainer(_BaseContainerDefinition):
     def wait_for_start(self):
         # Override wait_for_start to wait for the health check to succeed.
         # Still wait for log lines to match because we also need to wait for
@@ -81,12 +86,7 @@ class GunicornContainer(ContainerDefinition):
         return cls.for_fixture(name, *args, **kw).pytest_fixture(fixture_name)
 
 
-class CeleryContainer(ContainerDefinition):
-    WAIT_TIMEOUT = DEFAULT_WAIT_TIMEOUT
-
-    def list_processes(self):
-        return list_container_processes(self.inner())
-
+class CeleryContainer(_BaseContainerDefinition):
     @classmethod
     def for_fixture(cls, celery_command, wait_lines):
         kwargs = {

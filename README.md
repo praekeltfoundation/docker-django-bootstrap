@@ -18,7 +18,11 @@ For more background on running Django in Docker containers, see [this talk](http
    - [Step 1: Get your Django project in shape](#step-1-get-your-django-project-in-shape)
    - [Step 2: Write a Dockerfile](#step-2-write-a-dockerfile)
    - [Step 3: Add a .dockerignore file](#step-3-add-a-dockerignore-file-if-copying-in-the-project-source)
+<<<<<<< HEAD
    - [Specifying Gunicorn arguments](#specifying-gunicorn-arguments)
+=======
+   - [Configuring Gunicorn](#configuring-gunicorn)
+>>>>>>> develop
    - [Running other commands](#running-other-commands)
 2. [Celery](#celery)
    - [Option 1: Celery containers](#option-1-celery-containers)
@@ -116,7 +120,11 @@ Additionally, you shouldn't need any *Git* stuff inside your Docker image. It's 
 
 **NOTE:** Unlike `.gitignore` files, `.dockerignore` files do *not* apply recursively to subdirectories. So, for example, while the entry `*.pyc` in a `.gitignore` file will cause Git to ignore `./abc.pyc` and `./def/ghi.pyc`, in a `.dockerignore` file, that entry will cause Docker to ignore only `./abc.pyc`. This is very unfortunate. In order to get the same behaviour from a `.dockerignore` file, you need to add an extra leading `**/` glob pattern — i.e. `**/*.pyc`. For more information on the `.dockerignore` file syntax, see the [Docker documentation](https://docs.docker.com/engine/reference/builder/#dockerignore-file).
 
+<<<<<<< HEAD
 ### Specifying Gunicorn arguments
+=======
+### Configuring Gunicorn
+>>>>>>> develop
 The recommended way to specify additional Gunicorn arguments is by using the `CMD` directive in your Dockerfile:
 ```dockerfile
 CMD ["my_django_project.wsgi:application", "--timeout", "1800"]
@@ -126,12 +134,31 @@ Alternatively, this can also be done at runtime:
 > $ docker run my-django-bootstrap-image my_django_project.wsgi:application --timeout 1800
 ```
 
+<<<<<<< HEAD
 Note that, since Gunicorn 19.7.0, the `GUNICORN_CMD_ARGS` environment variable can also be used to specify arguments, but it's **not recommended** that you use it because the variable is already used by this image to set some basic options for Gunicorn. If you really need to specify arguments using that variable you can do so like:
 ```dockerfile
 ENV GUNICORN_CMD_ARGS "$GUNICORN_CMD_ARGS --timeout 1800"
 ```
 Arguments specified via the CLI (i.e. `CMD`) will take precedence over arguments specified via this environment variable.
 
+=======
+Note that, since Gunicorn 19.7.0, the `GUNICORN_CMD_ARGS` environment variable can also be used to specify arguments:
+```dockerfile
+ENV GUNICORN_CMD_ARGS "--timeout 1800"
+```
+Or at runtime:
+```
+> $ docker run -e GUNICORN_CMD_ARGS="--timeout 1800" my-django-bootstrap-image my_django_project.wsgi:application
+```
+Arguments specified via the CLI (i.e. `CMD`) will take precedence over arguments specified via this environment variable.
+
+See all the settings available for Gunicorn [here](http://docs.gunicorn.org/en/latest/settings.html). A common setting is the number of Gunicorn workers which can be set with the `WEB_CONCURRENCY` environment variable.
+
+Gunicorn can also be configured using a [configuration file](http://docs.gunicorn.org/en/latest/configure.html#configuration-file). We **do not recommend** this because django-bootstrap already uses a config file to set [some basic options for Gunicorn](#gunicorn). Note that the config file has the _lowest_ precedence of all the configuration methods so any option specified through either the CLI or the environment variable will override the same option in the config file.
+
+Gunicorn in this image is essentially hard-coded to use a config file at `/gunicorn_conf.py`. If you _must_ use your own config file, you could overwrite that file.
+
+>>>>>>> develop
 ### Running other commands
 You can skip the execution of the `django-entrypoint.sh` script bootstrapping processes and run other commands by overriding the container's launch command.
 
@@ -146,6 +173,8 @@ CMD ["django-admin", "runserver"]
 
 
 If the entrypoint script sees a command for `gunicorn` then it will run all bootstrapping processes (database migration, starting Nginx, etc.). Otherwise, the script will execute the command directly. A special case is Celery, which is described next.
+
+Note that overwriting the `django-entrypoint.sh` script with a new file is **not supported**. Code in django-bootstrap may change at any time and break compatibility with a custom entrypoint script.
 
 ## Celery
 It's common for Django applications to have [Celery](http://docs.celeryproject.org/en/latest/django/first-steps-with-django.html) workers performing tasks alongside the actual website. Using this image, there are 2 different ways to run Celery:
@@ -311,17 +340,10 @@ This is a direction we want to take the project, but currently our infrastructur
 
 ## Other configuration
 ### Gunicorn
-Gunicorn is run with some basic configuration:
+Gunicorn is run with some basic configuration using the config file at [`/gunicorn_conf.py`](gunicorn_conf.py):
 * Starts workers under the `django` user and group
 * Listens on a Unix socket at `/run/gunicorn/gunicorn.sock`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
-
-Extra settings can be provided by overriding the `CMD` instruction to pass extra parameters to the entrypoint script. For example:
-```dockerfile
-CMD ["my_django_project.wsgi:application", "--threads", "5", "--timeout", "50"]
-```
-
-See all the settings available for gunicorn [here](http://docs.gunicorn.org/en/latest/settings.html). A common setting is the number of Gunicorn workers which can be set with the `WEB_CONCURRENCY` environment variable.
 
 ### Nginx
 Nginx is set up with mostly default config:

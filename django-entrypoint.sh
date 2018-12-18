@@ -63,7 +63,11 @@ if not User.objects.filter(username='admin').exists():
     set -- "$@" "$APP_MODULE"
   fi
 
+<<<<<<< HEAD
   set -- su-exec django "$@" ${GUNICORN_ACCESS_LOGS:+--access-logfile -}
+=======
+  set -- su-exec django "$@" --config /gunicorn_conf.py
+>>>>>>> develop
 fi
 
 exec "$@"

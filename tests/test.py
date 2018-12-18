@@ -92,10 +92,10 @@ class TestWeb(object):
         tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
         gunicorn_master_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application')
+            'mysite.wsgi:application --config /gunicorn_conf.py')
         gunicorn_worker_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application')
+            'mysite.wsgi:application --config /gunicorn_conf.py')
         nginx_master_args = 'nginx: master process nginx -g daemon off;'
         nginx_worker_args = 'nginx: worker process'
 
@@ -123,10 +123,10 @@ class TestWeb(object):
         tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
         gunicorn_master_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application')
+            'mysite.wsgi:application --config /gunicorn_conf.py')
         gunicorn_worker_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application')
+            'mysite.wsgi:application --config /gunicorn_conf.py')
         nginx_master_args = 'nginx: master process nginx -g daemon off;'
         nginx_worker_args = 'nginx: worker process'
         celery_worker_args = (
@@ -152,6 +152,52 @@ class TestWeb(object):
                 ]),
             ]))
 
+    def test_expected_files(self, web_only_container):
+        """
+        When the container is running, there should be PID files for Nginx and
+        Gunicorn, a working directory for Gunicorn, and Gunicorn's Unix socket
+        file.
+        """
+        stat = web_only_container.exec_stat(
+            '/run/nginx.pid',
+            '/run/gunicorn',
+            '/run/gunicorn/gunicorn.sock',
+            '/run/gunicorn/gunicorn.pid',
+        )
+
+        assert_that(stat, Equals([
+            '644 root:root',
+            '755 django:django',
+            '660 django:django',
+            '644 django:django',
+        ]))
+
+    def test_expected_files_single_container(self, single_container):
+        """
+        When the container is running, there should be PID files for Nginx,
+        Gunicorn, and Celery, working directories for Gunicorn and Celery, and
+        Gunicorn's Unix socket file.
+        """
+        stat = single_container.exec_stat(
+            '/run/nginx.pid',
+            '/run/gunicorn',
+            '/run/gunicorn/gunicorn.sock',
+            '/run/gunicorn/gunicorn.pid',
+            '/run/celery',
+            '/run/celery/worker.pid',
+            '/run/celery/beat.pid',
+        )
+
+        assert_that(stat, Equals([
+            '644 root:root',
+            '755 django:django',
+            '660 django:django',
+            '644 django:django',
+            '755 django:django',
+            '644 django:django',
+            '644 django:django',
+        ]))
+
     @pytest.mark.clean_db_container
     def test_database_tables_created(self, db_container, web_container):
         """
@@ -161,8 +207,7 @@ class TestWeb(object):
         assert_that(len(public_tables(db_container)), GreaterThan(0))
 
     @pytest.mark.clean_db_container
-    def test_database_tables_not_created(
-            self, docker_helper, db_container, amqp_container):
+    def test_database_tables_not_created(self, docker_helper, db_container):
         """
         When the web container is running with the `SKIP_MIGRATIONS`
         environment variable set, there should be no tables in the database.
@@ -278,6 +323,46 @@ class TestWeb(object):
             'http_x_forwarded_proto': Equals(''),
             'http_x_forwarded_for': Equals(''),
         }))
+
+    def test_gunicorn_access_logs(self, docker_helper, db_container):
+        """
+        When the web container is running with the `GUNICORN_ACCESS_LOGS`
+        environment variable set, Gunicorn access logs should be output.
+        """
+        self._test_gunicorn_access_logs(docker_helper, web_container)
+
+    def test_gunicorn_access_logs_single(
+            self, docker_helper, db_container, amqp_container):
+        """
+        When the single container is running with the `GUNICORN_ACCESS_LOGS`
+        environment variable set, Gunicorn access logs should be output.
+        """
+        self._test_gunicorn_access_logs(docker_helper, single_container)
+
+    def _test_gunicorn_access_logs(self, docker_helper, web_container):
+        web_container.set_helper(docker_helper)
+        with web_container.setup(environment={'GUNICORN_ACCESS_LOGS': '1'}):
+            # Wait a little bit so that previous tests' requests have been
+            # written to the log.
+            time.sleep(0.2)
+            before_lines = output_lines(web_container.get_logs(stderr=False))
+
+            # Make a request to see the logs for it
+            web_client = web_container.http_client()
+            web_client.get('/')
+
+            # Wait a little bit so that our request has been written to the log.
+            time.sleep(0.2)
+            after_lines = output_lines(web_container.get_logs(stderr=False))
+
+            new_lines = after_lines[len(before_lines):]
+            assert_that(len(new_lines), GreaterThan(0))
+
+            # Find the Gunicorn log line (the not-Nginx-JSON line)
+            gunicorn_lines = [
+                l for l in new_lines if not re.match(r'^\{ .+', l)]
+            assert_that(gunicorn_lines, HasLength(1))
+            assert_that(gunicorn_lines[0], Contains('"GET / HTTP/1.0"'))
 
     def test_static_file(self, web_container):
         """
