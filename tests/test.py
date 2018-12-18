@@ -152,6 +152,52 @@ class TestWeb(object):
                 ]),
             ]))
 
+    def test_expected_files(self, web_only_container):
+        """
+        When the container is running, there should be PID files for Nginx and
+        Gunicorn, a working directory for Gunicorn, and Gunicorn's Unix socket
+        file.
+        """
+        stat = web_only_container.exec_stat(
+            '/run/nginx.pid',
+            '/run/gunicorn',
+            '/run/gunicorn/gunicorn.sock',
+            '/run/gunicorn/gunicorn.pid',
+        )
+
+        assert_that(stat, Equals([
+            '644 root:root',
+            '755 django:django',
+            '660 django:django',
+            '644 django:django',
+        ]))
+
+    def test_expected_files_single_container(self, single_container):
+        """
+        When the container is running, there should be PID files for Nginx,
+        Gunicorn, and Celery, working directories for Gunicorn and Celery, and
+        Gunicorn's Unix socket file.
+        """
+        stat = single_container.exec_stat(
+            '/run/nginx.pid',
+            '/run/gunicorn',
+            '/run/gunicorn/gunicorn.sock',
+            '/run/gunicorn/gunicorn.pid',
+            '/run/celery',
+            '/run/celery/worker.pid',
+            '/run/celery/beat.pid',
+        )
+
+        assert_that(stat, Equals([
+            '644 root:root',
+            '755 django:django',
+            '660 django:django',
+            '644 django:django',
+            '755 django:django',
+            '644 django:django',
+            '644 django:django',
+        ]))
+
     @pytest.mark.clean_db_container
     def test_database_tables_created(self, db_container, web_container):
         """
