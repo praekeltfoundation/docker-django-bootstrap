@@ -8,13 +8,8 @@ RUN set -ex; \
     addgroup --system --gid 107 django; \
     adduser --system --uid 104 --ingroup django django; \
     \
-<<<<<<< HEAD
     mkdir /run/gunicorn /run/gunicorn/prometheus /run/celery; \
     chown -R django:django /run/gunicorn /run/celery
-=======
-    mkdir /run/gunicorn /run/celery; \
-    chown django:django /run/gunicorn /run/celery
->>>>>>> develop
 
 # Install libpq for psycopg2 for PostgreSQL support
  RUN apt-get-install.sh libpq5
@@ -48,17 +43,6 @@ COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
 COPY gunicorn_conf.py /gunicorn_conf.py
-<<<<<<< HEAD
-# Set some sensible Gunicorn options, needed for things to work with Nginx.
-# GUNICORN_CMD_ARGS is available in Gunicorn 19.7.0+ and CLI args will take
-# precedence over it.
-ENV GUNICORN_CMD_ARGS "\
-    --config /gunicorn_conf.py \
-    --pid /run/gunicorn/gunicorn.pid \
-    --bind unix:/run/gunicorn/gunicorn.sock \
-    --umask 0117"
-=======
->>>>>>> develop
 
 EXPOSE 8000
 WORKDIR /app
