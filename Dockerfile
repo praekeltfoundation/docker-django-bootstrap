@@ -8,8 +8,8 @@ RUN set -ex; \
     addgroup --system --gid 107 django; \
     adduser --system --uid 104 --ingroup django django; \
     \
-    mkdir /var/run/gunicorn /var/run/celery; \
-    chown django:django /var/run/gunicorn /var/run/celery
+    mkdir /run/gunicorn /run/celery; \
+    chown django:django /run/gunicorn /run/celery
 
 # Install libpq for psycopg2 for PostgreSQL support
  RUN apt-get-install.sh libpq5
@@ -41,6 +41,8 @@ COPY nginx/ /etc/nginx/
 # Install gunicorn
 COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
+
+COPY gunicorn_conf.py /gunicorn_conf.py
 
 EXPOSE 8000
 WORKDIR /app

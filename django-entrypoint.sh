@@ -63,15 +63,7 @@ if not User.objects.filter(username='admin').exists():
     set -- "$@" "$APP_MODULE"
   fi
 
-  # Set some sensible Gunicorn options, needed for things to work with Nginx
-
-  # umask working files (worker tmp files & unix socket) as 0o117 (i.e. chmod as
-  # 0o660) so that they are only read/writable by django and nginx users.
-  set -- su-exec django "$@" \
-    --pid /var/run/gunicorn/gunicorn.pid \
-    --bind unix:/var/run/gunicorn/gunicorn.sock \
-    --umask 0117 \
-    ${GUNICORN_ACCESS_LOGS:+--access-logfile -}
+  set -- su-exec django "$@" --config /gunicorn_conf.py
 fi
 
 exec "$@"
