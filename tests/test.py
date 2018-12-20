@@ -10,6 +10,7 @@ import iso8601
 import pytest
 
 from seaworthy.ps import build_process_tree
+from seaworthy.stream.matchers import OrderedMatcher, RegexMatcher
 from seaworthy.testtools import MatchesPsTree
 from seaworthy.utils import output_lines
 
@@ -270,6 +271,41 @@ class TestWeb(object):
             ('django_http_requests_total_by_view_transport_method_total{'
              'method="GET",transport="http",view="prometheus-django-metrics"'
              '} 1.0')
+        ))
+
+    def test_prometheus_metrics_worker_restart(self, web_container):
+        """
+        When a worker process is restarted, Prometheus counters should be
+        preserved, such that a call to the metrics endpoint before a worker
+        restart can be observed after the worker restart.
+        """
+        web_client = web_container.http_client()
+        response = web_client.get('/metrics')
+
+        assert_that(response.text, Contains(
+            ('django_http_requests_total_by_view_transport_method_total{'
+             'method="GET",transport="http",view="prometheus-django-metrics"'
+             '} 1.0')
+        ))
+
+        # Signal Gunicorn so that it restarts the worker(s)
+        # http://docs.gunicorn.org/en/latest/signals.html
+        web_container.inner().kill("SIGHUP")
+
+        matcher = OrderedMatcher(*(RegexMatcher(r) for r in (
+            r'Booting worker',  # Original worker start on startup
+            r'Booting worker',  # Worker start after SIGHUP restart
+        )))
+        web_container.wait_for_logs_matching(
+            matcher, web_container.wait_timeout)
+
+        # Now try make another request and ensure the counter was incremented
+        response = web_client.get('/metrics')
+
+        assert_that(response.text, Contains(
+            ('django_http_requests_total_by_view_transport_method_total{'
+             'method="GET",transport="http",view="prometheus-django-metrics"'
+             '} 2.0')
         ))
 
     def test_nginx_access_logs(self, web_container):
