@@ -69,6 +69,26 @@ def filter_ldconfig_process(ps_rows):
             if not (row.ruser == 'django' and 'ldconfig' in row.args)]
 
 
+def metrics_endpoint_samples(metrics_text):
+    """
+    Get the samples available for the prometheus-django-metrics view given the
+    response text from the metrics endpoint.
+    """
+    # https://github.com/prometheus/client_python/#parser
+    from prometheus_client.parser import text_string_to_metric_families
+
+    samples = []
+    for family in text_string_to_metric_families(metrics_text):
+        if family.name == (
+                'django_http_requests_total_by_view_transport_method'):
+            for sample in family.samples:
+                if sample.labels['view'] == 'prometheus-django-metrics':
+                    samples.append(sample)
+            break
+
+    return samples
+
+
 class TestWeb(object):
     def test_expected_processes(self, web_only_container):
         """
@@ -267,11 +287,11 @@ class TestWeb(object):
 
         assert_that(response.headers['Content-Type'],
                     Equals('text/plain; version=0.0.4; charset=utf-8'))
-        assert_that(response.text, Contains(
-            ('django_http_requests_total_by_view_transport_method_total{'
-             'method="GET",transport="http",view="prometheus-django-metrics"'
-             '} 1.0')
-        ))
+
+        [sample] = metrics_endpoint_samples(response.text)
+        assert_that(sample.labels['transport'], Equals('http'))
+        assert_that(sample.labels['method'], Equals('GET'))
+        assert_that(sample.value, Equals(1.0))
 
     def test_prometheus_metrics_worker_restart(self, web_container):
         """
@@ -282,11 +302,8 @@ class TestWeb(object):
         web_client = web_container.http_client()
         response = web_client.get('/metrics')
 
-        assert_that(response.text, Contains(
-            ('django_http_requests_total_by_view_transport_method_total{'
-             'method="GET",transport="http",view="prometheus-django-metrics"'
-             '} 1.0')
-        ))
+        [sample] = metrics_endpoint_samples(response.text)
+        assert_that(sample.value, Equals(1.0))
 
         # Signal Gunicorn so that it restarts the worker(s)
         # http://docs.gunicorn.org/en/latest/signals.html
@@ -301,12 +318,8 @@ class TestWeb(object):
 
         # Now try make another request and ensure the counter was incremented
         response = web_client.get('/metrics')
-
-        assert_that(response.text, Contains(
-            ('django_http_requests_total_by_view_transport_method_total{'
-             'method="GET",transport="http",view="prometheus-django-metrics"'
-             '} 2.0')
-        ))
+        [sample] = metrics_endpoint_samples(response.text)
+        assert_that(sample.value, Equals(2.0))
 
     def test_nginx_access_logs(self, web_container):
         """
