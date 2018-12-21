@@ -324,8 +324,9 @@ This is a direction we want to take the project, but currently our infrastructur
 ## Other configuration
 ### Gunicorn
 Gunicorn is run with some basic configuration using the config file at [`/gunicorn_conf.py`](gunicorn_conf.py):
-* Starts workers under the `django` user and group
 * Listens on a Unix socket at `/run/gunicorn/gunicorn.sock`
+* Places a PID file at `/run/gunicorn/gunicorn.pid`
+* [Worker temporary files](http://docs.gunicorn.org/en/latest/settings.html#worker-tmp-dir) are placed in `/run/gunicorn`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
 
 ### Nginx

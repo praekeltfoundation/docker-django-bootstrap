@@ -34,8 +34,8 @@ class _BaseContainerDefinition(ContainerDefinition):
     def list_processes(self):
         return list_container_processes(self.inner())
 
-    def exec_run(self, args):
-        return output_lines(self.inner().exec_run(args))
+    def exec_run(self, args, **kwargs):
+        return output_lines(self.inner().exec_run(args, **kwargs))
 
     def exec_find(self, params):
         return self.exec_run(['find'] + params)
