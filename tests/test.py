@@ -228,7 +228,7 @@ class TestWeb(object):
 
         # Finally, assert the worker temp file is in the place we expect
         assert_that(neither_pipes_nor_socks, MatchesListwise(
-            [StartsWith('/run/gunicorn/wgunicorn-')])
+            [StartsWith('/run/gunicorn/wgunicorn-')]))
 
     @pytest.mark.clean_db_container
     def test_database_tables_created(self, db_container, web_container):
