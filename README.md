@@ -27,13 +27,14 @@ For more background on running Django in Docker containers, see [this talk](http
 3. [Choosing an image tag](#choosing-an-image-tag)
 4. [Monitoring and metrics](#monitoring-and-metrics)
    - [Health checks](#health-checks)
-5. [Frequently asked questions](#frequently-asked-questions)
+5. [Production-readiness](#production-readiness)
+6. [Frequently asked questions](#frequently-asked-questions)
    - [How is this deployed?](#how-is-this-deployed)
    - [Why is Nginx needed?](#why-is-nginx-needed)
    - [What about WhiteNoise?](#what-about-whitenoise)
    - [What about Gunicorn's async workers?](#what-about-gunicorns-async-workers)
    - [What about Django Channels?](#what-about-django-channels)
-6. [Other configuration](#other-configuration)
+7. [Other configuration](#other-configuration)
    - [Gunicorn](#gunicorn)
    - [Nginx](#nginx)
 
@@ -269,6 +270,13 @@ There are a few popular libraries available for implementing health checks in Dj
 * [`django-healthchecks`](https://github.com/mvantellingen/django-healthchecks)
 
 The [example Django projects](tests) we use to test `django-bootstrap` use a very basic configuration of [`django-health-check`](https://github.com/KristianOellegaard/django-health-check). Health checks can also be implemented from scratch in Django quite easily.
+
+## Production-readiness
+django-bootstrap has been used in production at [Praekelt.org](https://www.praekelt.org) for several years now for thousands of containers serving millions of users around the world. django-bootstrap was designed to encapsulate many of our best practices for deploying production-ready Django.
+
+That said, care should be taken in configuring containers at runtime with the appropriate settings. Here are a few points to check on:
+* If using Gunicorn's default synchronous workers, you should set the `WEB_CONCURRENCY` environment variable to some number greater than 1 (the default). Gunicorn has some [recommendations](http://docs.gunicorn.org/en/latest/design.html#how-many-workers).
+* Consider mounting the `/run` directory as a `tmpfs` volume. This can help improve performance consistency due to [the way Gunicorn handles signaling](http://docs.gunicorn.org/en/latest/faq.html#blocking-os-fchmod) between workers.
 
 ## Frequently asked questions
 ### How is this deployed?
