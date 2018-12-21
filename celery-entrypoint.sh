@@ -44,6 +44,10 @@ if [ "$1" = 'celery' ]; then
   # Run under the celery user
   set -- su-exec django "$@"
 
+  # Create the Celery runtime directory at runtime in case /run is a tmpfs
+  if mkdir /run/celery 2> /dev/null; then
+    chown django:django /run/celery
+  fi
   # Celery by default writes files like pidfiles and the beat schedule file to
   # the current working directory. Change to the Celery working directory so
   # that these files end up there.

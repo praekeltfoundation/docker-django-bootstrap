@@ -4,12 +4,7 @@ FROM praekeltfoundation/python-base:${PYTHON_VERSION}
 # Create the user and working directories first as they shouldn't change often.
 # Specify the UID/GIDs so that they do not change somehow and mess with the
 # ownership of external volumes.
-RUN set -ex; \
-    addgroup --system --gid 107 django; \
-    adduser --system --uid 104 --ingroup django django; \
-    \
-    mkdir /run/gunicorn /run/celery; \
-    chown django:django /run/gunicorn /run/celery
+RUN addgroup --system --gid 107 django && adduser --system --uid 104 --ingroup django django
 
 # Install libpq for psycopg2 for PostgreSQL support
  RUN apt-get-install.sh libpq5

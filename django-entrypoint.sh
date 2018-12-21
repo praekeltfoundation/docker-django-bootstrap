@@ -63,6 +63,11 @@ if not User.objects.filter(username='admin').exists():
     set -- "$@" "$APP_MODULE"
   fi
 
+  # Create the Gunicorn runtime directory at runtime in case /run is a tmpfs
+  if mkdir /run/gunicorn 2> /dev/null; then
+    chown django:django /run/gunicorn
+  fi
+
   set -- su-exec django "$@" --config /gunicorn_conf.py
 fi
 
