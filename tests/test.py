@@ -218,7 +218,7 @@ class TestWeb(object):
             'for fd in {}/*; do readlink -f "$fd"; done'.format(proc_fd_path)
         ], user='django')
 
-        # Filter out non-file things
+        # Filter out pipes and sockets
         pipe_path = '{}/pipe'.format(proc_fd_path)
         ceci_nest_pas_une_pipe = (
             [t for t in fd_targets if not t.startswith(pipe_path)])
@@ -226,9 +226,14 @@ class TestWeb(object):
         neither_pipes_nor_socks = (
             [t for t in ceci_nest_pas_une_pipe if not t.startswith(sock_path)])
 
+        # Sometimes things like /dev/urandom are in there too
+        files = (
+            [t for t in neither_pipes_nor_socks if not t.startswith('/dev/')])
+
         # Finally, assert the worker temp file is in the place we expect
-        assert_that(neither_pipes_nor_socks, MatchesListwise(
-            [StartsWith('/run/gunicorn/wgunicorn-')]))
+        assert_that(files, MatchesListwise([
+            StartsWith('/run/gunicorn/wgunicorn-')
+        ]))
 
     @pytest.mark.clean_db_container
     def test_database_tables_created(self, db_container, web_container):
