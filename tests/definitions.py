@@ -34,8 +34,8 @@ class _BaseContainerDefinition(ContainerDefinition):
     def list_processes(self):
         return list_container_processes(self.inner())
 
-    def exec_run(self, args):
-        return output_lines(self.inner().exec_run(args))
+    def exec_run(self, args, **kwargs):
+        return output_lines(self.inner().exec_run(args, **kwargs))
 
     def exec_find(self, params):
         return self.exec_run(['find'] + params)
@@ -63,10 +63,14 @@ class GunicornContainer(_BaseContainerDefinition):
         kwargs = {
             'command': command,
             'environment': env,
-            # Add a tmpfs mount at /app/media so that we can test ownership of
-            # the directory is set. Normally a proper volume would be mounted
-            # but the effect is the same.
-            'tmpfs': {'/app/media': 'uid=0'},
+            'tmpfs': {
+                # Everything in /run should be ephemeral and created at runtime
+                '/run': '',
+                # Add a tmpfs mount at /app/media so that we can test ownership
+                # of the directory is set. Normally a proper volume would be
+                # mounted but the effect is the same.
+                '/app/media': 'uid=0'
+            },
             'ports': {'8000/tcp': ('127.0.0.1',)}
         }
 
