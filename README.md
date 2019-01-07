@@ -279,7 +279,7 @@ We recommend instrumenting your Django project with [`django-prometheus`](https:
 
 One important note is that when using [Gunicorn's default synchronous workers](http://docs.gunicorn.org/en/latest/design.html#sync-workers), the Prometheus client must be used in [multiprocess mode](https://github.com/prometheus/client_python#multiprocess-mode-gunicorn). This mode has a number of limitations so you should read the docs and be aware of those.
 
-django-bootstrap attempts to detect when Gunicorn synchronous workers are used and will configure multiprocess mode automatically. Note that this requires that metrics are written to disk and so this will have performance implications.
+django-bootstrap attempts to detect when Gunicorn synchronous workers are used and will configure multiprocess mode automatically. Note that this requires that metrics are written to disk (at `/run/gunicorn/prometheus`) and so may have performance implications.
 
 ## Production-readiness
 django-bootstrap has been used in production at [Praekelt.org](https://www.praekelt.org) for several years now for thousands of containers serving millions of users around the world. django-bootstrap was designed to encapsulate many of our best practices for deploying production-ready Django.
