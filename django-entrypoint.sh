@@ -65,7 +65,8 @@ if not User.objects.filter(username='admin').exists():
 
   # Create the Gunicorn runtime directory at runtime in case /run is a tmpfs
   if mkdir /run/gunicorn 2> /dev/null; then
-    chown django:django /run/gunicorn
+    mkdir /run/gunicorn/prometheus
+    chown django:django /run/gunicorn /run/gunicorn/prometheus
   fi
 
   set -- su-exec django "$@" --config /gunicorn_conf.py
