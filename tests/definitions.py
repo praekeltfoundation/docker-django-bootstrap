@@ -20,7 +20,7 @@ db_container = PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT)
 amqp_container = RabbitMQContainer(
     vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT)
 
-default_env = env = {
+default_env = {
     'SECRET_KEY': 'secret',
     'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
     'CELERY_BROKER_URL': amqp_container.broker_url(),

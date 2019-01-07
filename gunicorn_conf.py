@@ -1,7 +1,5 @@
 import os
 
-from gunicorn.workers.sync import SyncWorker
-
 
 # See http://docs.gunicorn.org/en/latest/settings.html for a list of available
 # settings. Note that the setting names are used here and not the CLI option
@@ -23,15 +21,31 @@ if os.environ.get("GUNICORN_ACCESS_LOGS"):
     accesslog = "-"
 
 
-def post_fork(server, worker):
-    # Since setting the prometheus_multiproc_dir environment variable can make
-    # the prometheus_client library create a bunch of files before we want it
-    # to, only do so at the very last moment: when we're running a worker.
-    # Also check that this is a synchronous worker before doing anything, and
-    # don't override an existing value.
-    if isinstance(worker, SyncWorker):
-        if "prometheus_multiproc_dir" not in os.environ:
-            os.environ["prometheus_multiproc_dir"] = "/run/gunicorn/prometheus"
+def _prometheus_multiproc_dir():
+    # Use the existing value if there is one
+    if "prometheus_multiproc_dir" in os.environ:
+        return os.environ["prometheus_multiproc_dir"]
+
+    # If the client isn't installed don't set the variable
+    try:
+        import prometheus_client  # noqa: F401
+    except ImportError:
+        return None
+
+    # If we got this far we can manage the directory ourselves, hopefully
+    default_prometheus_multiproc_dir = "/run/gunicorn/prometheus"
+
+    try:
+        os.mkdir(default_prometheus_multiproc_dir)
+    except FileExistsError:
+        pass
+
+    return default_prometheus_multiproc_dir
+
+
+prometheus_multiproc_dir = _prometheus_multiproc_dir()
+if prometheus_multiproc_dir:
+    raw_env = ["prometheus_multiproc_dir=" + prometheus_multiproc_dir]
 
 
 def worker_exit(server, worker):
