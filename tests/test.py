@@ -18,7 +18,7 @@ from testtools.assertions import assert_that
 from testtools.matchers import (
     AfterPreprocessing as After, Contains, Equals, GreaterThan, HasLength,
     LessThan, MatchesAll, MatchesAny, MatchesDict, MatchesListwise,
-    MatchesRegex, MatchesSetwise, Not)
+    MatchesRegex, MatchesSetwise, Not, StartsWith)
 
 from definitions import (  # noqa: I100,I101
     # dependencies
@@ -193,6 +193,8 @@ class TestWeb(object):
             '644 django:django',
         ]))
 
+        self._assert_gunicorn_worker_tmp_file(web_only_container)
+
     def test_expected_files_single_container(self, single_container):
         """
         When the container is running, there should be PID files for Nginx,
@@ -217,6 +219,41 @@ class TestWeb(object):
             '755 django:django',
             '644 django:django',
             '644 django:django',
+        ]))
+
+        self._assert_gunicorn_worker_tmp_file(single_container)
+
+    def _assert_gunicorn_worker_tmp_file(self, container):
+        # Find the worker temporary file...this is quite involved because it's
+        # a temp file without a predictable name and Gunicorn unlinks it so we
+        # can't just stat it
+        ps_rows = container.list_processes()
+        gunicorns = [r for r in ps_rows if '/usr/local/bin/gunicorn' in r.args]
+        worker = gunicorns[-1]  # Already sorted by PID, pick the highest PID
+        proc_fd_path = '/proc/{}/fd'.format(worker.pid)
+
+        # Due to container restrictions, the root user doesn't have access to
+        # /proc/pid/fd/*--we must run as the django user.
+        fd_targets = container.exec_run([
+            'bash', '-c',
+            'for fd in {}/*; do readlink -f "$fd"; done'.format(proc_fd_path)
+        ], user='django')
+
+        # Filter out pipes and sockets
+        pipe_path = '{}/pipe'.format(proc_fd_path)
+        ceci_nest_pas_une_pipe = (
+            [t for t in fd_targets if not t.startswith(pipe_path)])
+        sock_path = '{}/socket'.format(proc_fd_path)
+        neither_pipes_nor_socks = (
+            [t for t in ceci_nest_pas_une_pipe if not t.startswith(sock_path)])
+
+        # Sometimes things like /dev/urandom are in there too
+        files = (
+            [t for t in neither_pipes_nor_socks if not t.startswith('/dev/')])
+
+        # Finally, assert the worker temp file is in the place we expect
+        assert_that(files, MatchesListwise([
+            StartsWith('/run/gunicorn/wgunicorn-')
         ]))
 
     @pytest.mark.clean_db_container

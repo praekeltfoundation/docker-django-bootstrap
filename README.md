@@ -28,13 +28,14 @@ For more background on running Django in Docker containers, see [this talk](http
 4. [Monitoring and metrics](#monitoring-and-metrics)
    - [Health checks](#health-checks)
    - [Metrics](#metrics)
-5. [Frequently asked questions](#frequently-asked-questions)
+5. [Production-readiness](#production-readiness)
+6. [Frequently asked questions](#frequently-asked-questions)
    - [How is this deployed?](#how-is-this-deployed)
    - [Why is Nginx needed?](#why-is-nginx-needed)
    - [What about WhiteNoise?](#what-about-whitenoise)
    - [What about Gunicorn's async workers?](#what-about-gunicorns-async-workers)
    - [What about Django Channels?](#what-about-django-channels)
-6. [Other configuration](#other-configuration)
+7. [Other configuration](#other-configuration)
    - [Gunicorn](#gunicorn)
    - [Nginx](#nginx)
 
@@ -280,6 +281,13 @@ One important note is that when using [Gunicorn's default synchronous workers](h
 
 django-bootstrap attempts to detect when Gunicorn synchronous workers are used and will configure multiprocess mode automatically. Note that this requires that metrics are written to disk and so this will have performance implications.
 
+## Production-readiness
+django-bootstrap has been used in production at [Praekelt.org](https://www.praekelt.org) for several years now for thousands of containers serving millions of users around the world. django-bootstrap was designed to encapsulate many of our best practices for deploying production-ready Django.
+
+That said, care should be taken in configuring containers at runtime with the appropriate settings. Here are a few points to check on:
+* If using Gunicorn's default synchronous workers, you should set the `WEB_CONCURRENCY` environment variable to some number greater than 1 (the default). Gunicorn has some [recommendations](http://docs.gunicorn.org/en/latest/design.html#how-many-workers).
+* Consider mounting the `/run` directory as a `tmpfs` volume. This can help improve performance consistency due to [the way Gunicorn handles signaling](http://docs.gunicorn.org/en/latest/faq.html#blocking-os-fchmod) between workers.
+
 ## Frequently asked questions
 ### How is this deployed?
 This will depend very much on your infrastructure. This Docker image was designed with an architecture like this in mind:
@@ -334,8 +342,9 @@ This is a direction we want to take the project, but currently our infrastructur
 ## Other configuration
 ### Gunicorn
 Gunicorn is run with some basic configuration using the config file at [`/gunicorn_conf.py`](gunicorn_conf.py):
-* Starts workers under the `django` user and group
 * Listens on a Unix socket at `/run/gunicorn/gunicorn.sock`
+* Places a PID file at `/run/gunicorn/gunicorn.pid`
+* [Worker temporary files](http://docs.gunicorn.org/en/latest/settings.html#worker-tmp-dir) are placed in `/run/gunicorn`
 * Access logs can be logged to stderr by setting the `GUNICORN_ACCESS_LOGS` environment variable to a non-empty value.
 
 ### Nginx
