@@ -184,6 +184,7 @@ class TestWeb(object):
             '/run/gunicorn',
             '/run/gunicorn/gunicorn.sock',
             '/run/gunicorn/gunicorn.pid',
+            '/run/gunicorn/prometheus',
         )
 
         assert_that(stat, Equals([
@@ -191,9 +192,12 @@ class TestWeb(object):
             '755 django:django',
             '660 django:django',
             '644 django:django',
+            '755 django:django',
         ]))
 
         self._assert_gunicorn_worker_tmp_file(web_only_container)
+
+        self._assert_prometheus_dbs(web_only_container)
 
     def test_expected_files_single_container(self, single_container):
         """
@@ -206,6 +210,7 @@ class TestWeb(object):
             '/run/gunicorn',
             '/run/gunicorn/gunicorn.sock',
             '/run/gunicorn/gunicorn.pid',
+            '/run/gunicorn/prometheus',
             '/run/celery',
             '/run/celery/worker.pid',
             '/run/celery/beat.pid',
@@ -217,11 +222,14 @@ class TestWeb(object):
             '660 django:django',
             '644 django:django',
             '755 django:django',
+            '755 django:django',
             '644 django:django',
             '644 django:django',
         ]))
 
         self._assert_gunicorn_worker_tmp_file(single_container)
+
+        self._assert_prometheus_dbs(single_container)
 
     def _assert_gunicorn_worker_tmp_file(self, container):
         # Find the worker temporary file...this is quite involved because it's
@@ -250,11 +258,29 @@ class TestWeb(object):
         # Sometimes things like /dev/urandom are in there too
         files = (
             [t for t in neither_pipes_nor_socks if not t.startswith('/dev/')])
+        not_prom_files = (
+            [t for t in files if not t.startswith('/run/gunicorn/prometheus/')]
+        )
 
         # Finally, assert the worker temp file is in the place we expect
-        assert_that(files, MatchesListwise([
+        assert_that(not_prom_files, MatchesListwise([
             StartsWith('/run/gunicorn/wgunicorn-')
         ]))
+
+    def _assert_prometheus_dbs(self, container):
+        # The worker Gunicorn process has some process-specific db-files. Get
+        # the PID and assert there are files for it.
+        ps_rows = container.list_processes()
+        gunicorns = [r for r in ps_rows if '/usr/local/bin/gunicorn' in r.args]
+        pid = gunicorns[-1].pid  # Already sorted by PID, pick the highest PID
+
+        prom_files = container.exec_find(
+            ['/run/gunicorn/prometheus/', '-type', 'f'])
+        assert_that(prom_files, MatchesSetwise(
+            Equals('/run/gunicorn/prometheus/counter_{}.db'.format(pid)),
+            Equals('/run/gunicorn/prometheus/gauge_all_{}.db'.format(pid)),
+            Equals('/run/gunicorn/prometheus/histogram_{}.db'.format(pid)),
+        ))
 
     @pytest.mark.clean_db_container
     def test_database_tables_created(self, db_container, web_container):
