@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 
 import iso8601
 
+from prometheus_client import parser as prom_parser
+
 import pytest
 
 from seaworthy.ps import build_process_tree
@@ -69,20 +71,18 @@ def filter_ldconfig_process(ps_rows):
             if not (row.ruser == 'django' and 'ldconfig' in row.args)]
 
 
-def metrics_endpoint_samples(metrics_text):
+def http_requests_total_for_view(metrics_text, view):
     """
-    Get the samples available for the prometheus-django-metrics view given the
-    response text from the metrics endpoint.
+    Get the samples available for a view given the response text from the
+    metrics endpoint.
     """
     # https://github.com/prometheus/client_python/#parser
-    from prometheus_client.parser import text_string_to_metric_families
-
     samples = []
-    for family in text_string_to_metric_families(metrics_text):
+    for family in prom_parser.text_string_to_metric_families(metrics_text):
         if family.name == (
                 'django_http_requests_total_by_view_transport_method'):
             for sample in family.samples:
-                if sample.labels['view'] == 'prometheus-django-metrics':
+                if sample.labels['view'] == view:
                     samples.append(sample)
             break
 
@@ -351,7 +351,8 @@ class TestWeb(object):
         assert_that(response.headers['Content-Type'],
                     Equals('text/plain; version=0.0.4; charset=utf-8'))
 
-        [sample] = metrics_endpoint_samples(response.text)
+        [sample] = http_requests_total_for_view(
+            response.text, 'prometheus-django-metrics')
         assert_that(sample.labels['transport'], Equals('http'))
         assert_that(sample.labels['method'], Equals('GET'))
         assert_that(sample.value, Equals(1.0))
@@ -365,7 +366,8 @@ class TestWeb(object):
         web_client = web_container.http_client()
         response = web_client.get('/metrics')
 
-        [sample] = metrics_endpoint_samples(response.text)
+        [sample] = http_requests_total_for_view(
+            response.text, 'prometheus-django-metrics')
         assert_that(sample.value, Equals(1.0))
 
         # Signal Gunicorn so that it restarts the worker(s)
@@ -381,8 +383,71 @@ class TestWeb(object):
 
         # Now try make another request and ensure the counter was incremented
         response = web_client.get('/metrics')
-        [sample] = metrics_endpoint_samples(response.text)
+        [sample] = http_requests_total_for_view(
+            response.text, 'prometheus-django-metrics')
         assert_that(sample.value, Equals(2.0))
+
+    def test_prometheus_metrics_web_concurrency(
+            self, docker_helper, db_container):
+        """
+        When the web container is running with multiple worker processes,
+        multiple requests to the admin or metrics endpoints should result in
+        the expected metrics.
+        """
+        self._test_prometheus_metrics_web_concurrency(
+            docker_helper, web_container)
+
+    def test_prometheus_metrics_web_concurrency_single(
+            self, docker_helper, db_container, amqp_container):
+        """
+        When the single container is running with multiple worker processes,
+        multiple requests to the admin or metrics endpoints should result in
+        the expected metrics.
+        """
+        self._test_prometheus_metrics_web_concurrency(
+            docker_helper, single_container)
+
+    def _test_prometheus_metrics_web_concurrency(
+            self, docker_helper, django_container):
+        django_container.set_helper(docker_helper)
+
+        # Mo' workers mo' problems
+        # FIXME: Make this a bit less hacky somehow...
+        django_container.wait_matchers *= 4
+
+        with django_container.setup(environment={'WEB_CONCURRENCY': '4'}):
+            client = django_container.http_client()
+
+            # Make a bunch of requests
+            for _ in range(10):
+                response = client.get('/admin')
+                assert_that(response.status_code, Equals(200))
+
+            # Check the metrics a bunch of times for a few things...
+            # We don't know which worker serves which request, so we just
+            # make a few requests hoping we'll hit multiple/all of them.
+            for i in range(10):
+                response = client.get('/metrics')
+
+                # Requests to the admin page are counted
+                [admin_sample] = http_requests_total_for_view(
+                    response.text, view='admin:index')
+                assert_that(admin_sample.value, Equals(10.0))
+
+                # Requests to the metrics endpoint increment
+                [metrics_sample] = http_requests_total_for_view(
+                    response.text, 'prometheus-django-metrics')
+                assert_that(metrics_sample.value, Equals(i + 1))
+
+                # django_migrations_ samples are per-process, with a pid label.
+                # Check that there are 4 different pids.
+                fs = prom_parser.text_string_to_metric_families(response.text)
+                [family] = [f for f in fs
+                            if f.name == 'django_migrations_applied_total']
+                pids = set()
+                for sample in family.samples:
+                    pids.add(sample.labels['pid'])
+                assert_that(pids, HasLength(4))
 
     def test_nginx_access_logs(self, web_container):
         """
