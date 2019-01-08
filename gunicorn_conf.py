@@ -21,31 +21,24 @@ if os.environ.get("GUNICORN_ACCESS_LOGS"):
     accesslog = "-"
 
 
+DEFAULT_PROMETHEUS_MULTIPROC_DIR = "/run/gunicorn/prometheus"
+
+
 def _prometheus_multiproc_dir():
     # Use the existing value if there is one
     if "prometheus_multiproc_dir" in os.environ:
         return os.environ["prometheus_multiproc_dir"]
 
-    # If the client isn't installed don't set the variable
+    # Else, use a default directory and try manage it ourselves
     try:
-        import prometheus_client  # noqa: F401
-    except ImportError:
-        return None
-
-    # If we got this far we can manage the directory ourselves, hopefully
-    default_prometheus_multiproc_dir = "/run/gunicorn/prometheus"
-
-    try:
-        os.mkdir(default_prometheus_multiproc_dir)
+        os.mkdir(DEFAULT_PROMETHEUS_MULTIPROC_DIR)
     except FileExistsError:
         pass
 
-    return default_prometheus_multiproc_dir
+    return DEFAULT_PROMETHEUS_MULTIPROC_DIR
 
 
-prometheus_multiproc_dir = _prometheus_multiproc_dir()
-if prometheus_multiproc_dir:
-    raw_env = ["prometheus_multiproc_dir=" + prometheus_multiproc_dir]
+raw_env = ["=".join(("prometheus_multiproc_dir", _prometheus_multiproc_dir()))]
 
 
 def worker_exit(server, worker):
