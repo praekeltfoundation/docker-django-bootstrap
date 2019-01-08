@@ -1,6 +1,5 @@
 import os
 
-
 # See http://docs.gunicorn.org/en/latest/settings.html for a list of available
 # settings. Note that the setting names are used here and not the CLI option
 # names (e.g. "pidfile", not "pid").
@@ -30,10 +29,8 @@ def _prometheus_multiproc_dir():
         return os.environ["prometheus_multiproc_dir"]
 
     # Else, use a default directory and try manage it ourselves
-    try:
+    if not os.path.exists(DEFAULT_PROMETHEUS_MULTIPROC_DIR):
         os.mkdir(DEFAULT_PROMETHEUS_MULTIPROC_DIR)
-    except FileExistsError:
-        pass
 
     return DEFAULT_PROMETHEUS_MULTIPROC_DIR
 
