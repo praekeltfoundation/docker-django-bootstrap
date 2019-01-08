@@ -39,10 +39,12 @@ raw_env = ["=".join(("prometheus_multiproc_dir", _prometheus_multiproc_dir()))]
 
 
 def worker_exit(server, worker):
-    # Do the Prometheus multiprocess thing if its working directory is set and
-    # the library is importable.
+    # Do bookkeeping for Prometheus collectors for each worker process as they
+    # exit, as described in the prometheus_client documentation:
     # https://github.com/prometheus/client_python#multiprocess-mode-gunicorn
-    if os.environ.get("prometheus_multiproc_dir"):
+    if "prometheus_multiproc_dir" in os.environ:
+        # Don't error if the environment variable has been set but
+        # prometheus_client isn't installed
         try:
             from prometheus_client import multiprocess
         except ImportError:
