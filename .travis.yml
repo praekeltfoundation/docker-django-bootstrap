@@ -14,6 +14,7 @@ env:
     - IMAGE_USER=praekeltfoundation
     - REGISTRY_USER=praekeltorgdeploy
     - secure: "UK7h5cBSPlsL1bPJx+S7ArYKHIUjEWfsITw8M/ObTLaIQHMq2uV3J/D7K5GFkqJFX9sUGmFZBkCu1J9JwpieO1Ew79B2/g4i0aDDmhIuE+IOo5tQ6jinAmP1NEVrCvk1LUTdXwk46VbUCGNxYpv44ge1zwhRrtNpMxaIqXsSYLOXjA7p7A/IghDRYDsRIjz6TfXNKcw+qWxzUTSUjLqgcZqezvI3c9VRRgD94vKh9KpLryVtSPxGjUQTKD6cfu6Yvbz6TzVGp6QCEM9ysRdRJx0ecsP39XBj8VVnqI34ux+4sqiwdqM7SQTlaKFJK+o6dMAX5ZEkA9jQw2kWDX0Pg60zHX+vbH1vycPVaQ6ln9J68pNZx6AMFbJpDkTacrmStH9uIuH6+pN4j4gNsT4TkwtFJDcRuGI0gShqBgQVVHhGuCECfj6RZQ7K35NsQVHXQy47AkwGODu3xUwAuiMOeQVR2rEYCBnJfx+qLY5hIsPzR4MhidLPSZa5T520uhp+35pVAk95DYYEL+6N2C3wIOmtEl6gZNC1P0IgCDuTOU/u5+TCaS5C7M3aWk26SL+n3JnFeCAgLr+OYntHwW9PIen70OG1bokGdxQZ00DvF9veyQz+6IGVEG1Cm5MZv6Cp9bqgpGYMRhKBEAJyKrT+slt6ah10+eIJbT7p4HIgKBM="
+    - DIVE_VERSION=0.6.0
   matrix:
     - PYTHON_VERSION=2.7 VARIANT=jessie  TEST_PROJECT=django1 VERSION_LATEST=  TAG_LATEST=
     - PYTHON_VERSION=2.7 VARIANT=stretch TEST_PROJECT=django1 VERSION_LATEST=  TAG_LATEST=1
@@ -23,6 +24,7 @@ env:
 
 install:
   - pip install -r tests/requirements.txt
+  - wget -O- "https://github.com/wagoodman/dive/releases/download/v$DIVE_VERSION/dive_${DIVE_VERSION}_linux_amd64.tar.gz" | tar -xz
 
 before_script:
   - tag="py$PYTHON_VERSION-$VARIANT"
@@ -34,6 +36,7 @@ script:
   - docker build -t "mysite:$tag" --build-arg VARIANT="$tag" --build-arg PROJECT="$TEST_PROJECT" tests
   - pytest -v tests/test.py --django-bootstrap-image="mysite:$tag"
   - flake8 gunicorn_conf.py && flake8 tests
+  - CI=true ./dive "$image"
 
 after_script:
   - docker images
