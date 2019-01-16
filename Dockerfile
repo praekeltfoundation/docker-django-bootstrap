@@ -1,10 +1,12 @@
 ARG PYTHON_VERSION=3.7-stretch
 FROM praekeltfoundation/python-base:${PYTHON_VERSION}
 
-# Create the user and working directories first as they shouldn't change often.
+# Create the user and group first as they shouldn't change often.
 # Specify the UID/GIDs so that they do not change somehow and mess with the
 # ownership of external volumes.
-RUN addgroup --system --gid 107 django && adduser --system --uid 104 --ingroup django django
+RUN addgroup --system --gid 107 django \
+    && adduser --system --uid 104 --ingroup django django \
+    && mkdir /etc/gunicorn
 
 # Install libpq for psycopg2 for PostgreSQL support
  RUN apt-get-install.sh libpq5
@@ -34,10 +36,8 @@ RUN set -ex; \
 COPY nginx/ /etc/nginx/
 
 # Install gunicorn
-COPY requirements.txt /requirements.txt
-RUN pip install -r /requirements.txt
-
-COPY gunicorn_conf.py /gunicorn_conf.py
+COPY gunicorn/ /etc/gunicorn/
+RUN pip install -r /etc/gunicorn/requirements.txt
 
 EXPOSE 8000
 WORKDIR /app

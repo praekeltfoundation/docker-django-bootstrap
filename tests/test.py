@@ -113,10 +113,10 @@ class TestWeb(object):
         tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
         gunicorn_master_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application --config /gunicorn_conf.py')
+            'mysite.wsgi:application --config /etc/gunicorn/config.py')
         gunicorn_worker_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application --config /gunicorn_conf.py')
+            'mysite.wsgi:application --config /etc/gunicorn/config.py')
         nginx_master_args = 'nginx: master process nginx -g daemon off;'
         nginx_worker_args = 'nginx: worker process'
 
@@ -144,10 +144,10 @@ class TestWeb(object):
         tini_args = 'tini -- django-entrypoint.sh mysite.wsgi:application'
         gunicorn_master_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application --config /gunicorn_conf.py')
+            'mysite.wsgi:application --config /etc/gunicorn/config.py')
         gunicorn_worker_args = (
             '/usr/local/bin/python /usr/local/bin/gunicorn '
-            'mysite.wsgi:application --config /gunicorn_conf.py')
+            'mysite.wsgi:application --config /etc/gunicorn/config.py')
         nginx_master_args = 'nginx: master process nginx -g daemon off;'
         nginx_worker_args = 'nginx: worker process'
         celery_worker_args = (

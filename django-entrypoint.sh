@@ -68,7 +68,7 @@ if not User.objects.filter(username='admin').exists():
     chown django:django /run/gunicorn
   fi
 
-  set -- su-exec django "$@" --config /gunicorn_conf.py
+  set -- su-exec django "$@" --config /etc/gunicorn/config.py
 fi
 
 exec "$@"
