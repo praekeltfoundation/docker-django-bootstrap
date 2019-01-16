@@ -8,6 +8,7 @@ python: '3.7'
 branches:
   only:
     - develop
+    - geops-210/prom-example
 
 env:
   global:
@@ -42,7 +43,11 @@ before_deploy:
   - pip install docker-ci-deploy==0.3.0
   - echo "$REGISTRY_PASS" | docker login -u "$REGISTRY_USER" --password-stdin
 deploy:
-  provider: script
-  script: dcd -t "$VARIANT" ${TAG_LATEST:+latest} -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
-  on:
-    branch: develop
+  - provider: script
+    script: dcd -t "$VARIANT" ${TAG_LATEST:+latest} -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
+    on:
+      branch: develop
+  - provider: script
+    script: dcd -t "$VARIANT-prom" -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
+    on:
+      branch: geops-210/prom-example
