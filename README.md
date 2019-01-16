@@ -141,7 +141,7 @@ See all the settings available for Gunicorn [here](http://docs.gunicorn.org/en/l
 
 Gunicorn can also be configured using a [configuration file](http://docs.gunicorn.org/en/latest/configure.html#configuration-file). We **do not recommend** this because django-bootstrap already uses a config file to set [some basic options for Gunicorn](#gunicorn). Note that the config file has the _lowest_ precedence of all the configuration methods so any option specified through either the CLI or the environment variable will override the same option in the config file.
 
-Gunicorn in this image is essentially hard-coded to use a config file at `/gunicorn_conf.py`. If you _must_ use your own config file, you could overwrite that file.
+Gunicorn in this image is essentially hard-coded to use a config file at `/etc/gunicorn/config.py`. If you _must_ use your own config file, you could overwrite that file.
 
 ### Running other commands
 You can skip the execution of the `django-entrypoint.sh` script bootstrapping processes and run other commands by overriding the container's launch command.
@@ -331,7 +331,7 @@ This is a direction we want to take the project, but currently our infrastructur
 
 ## Other configuration
 ### Gunicorn
-Gunicorn is run with some basic configuration using the config file at [`/gunicorn_conf.py`](gunicorn_conf.py):
+Gunicorn is run with some basic configuration using the [config file](gunicorn/config.py) at `/etc/gunicorn/config.py`:
 * Listens on a Unix socket at `/run/gunicorn/gunicorn.sock`
 * Places a PID file at `/run/gunicorn/gunicorn.pid`
 * [Worker temporary files](http://docs.gunicorn.org/en/latest/settings.html#worker-tmp-dir) are placed in `/run/gunicorn`
