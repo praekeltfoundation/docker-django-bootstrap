@@ -48,6 +48,6 @@ deploy:
     on:
       branch: develop
   - provider: script
-    script: dcd -t "$VARIANT-prom" -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
+    script: dcd -t "$VARIANT-prom" ${TAG_LATEST:+prom} -V "py$PYTHON_VERSION" --version-semver -P ${SEMVER_PRECISION:-1} ${VERSION_LATEST:+-L} "$image"
     on:
       branch: geops-210/prom-example
