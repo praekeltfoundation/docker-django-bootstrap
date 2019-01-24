@@ -9,7 +9,7 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 
 Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
 
-> **NOTE:** The `latest`/shorter form tags now track the latest Python and Debian releases. The latest/shorter tags for these images originally pointed to Debian Jessie and Python 2.7 images. This has been updated to match the behaviour of the upstream image tags. You should generally use the most specific tag that you need, for example `py3.6-stretch`.
+> **NOTE:** Integration with the [`prometheus_client`](https://github.com/prometheus/client_python) library was recently added to the image. This may impact users who were using that library already. Please read the [metrics](#metrics) documentation for more information.
 
 For more background on running Django in Docker containers, see [this talk](https://www.youtube.com/watch?v=T2hooQzvurQ) ([slides](https://speakerdeck.com/jayh5/deploying-django-web-applications-in-docker-containers)) from PyConZA 2017.
 
