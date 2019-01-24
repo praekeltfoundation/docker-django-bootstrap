@@ -27,6 +27,7 @@ For more background on running Django in Docker containers, see [this talk](http
 3. [Choosing an image tag](#choosing-an-image-tag)
 4. [Monitoring and metrics](#monitoring-and-metrics)
    - [Health checks](#health-checks)
+   - [Metrics](#metrics)
 5. [Production-readiness](#production-readiness)
 6. [Frequently asked questions](#frequently-asked-questions)
    - [How is this deployed?](#how-is-this-deployed)
@@ -270,6 +271,15 @@ There are a few popular libraries available for implementing health checks in Dj
 * [`django-healthchecks`](https://github.com/mvantellingen/django-healthchecks)
 
 The [example Django projects](tests) we use to test `django-bootstrap` use a very basic configuration of [`django-health-check`](https://github.com/KristianOellegaard/django-health-check). Health checks can also be implemented from scratch in Django quite easily.
+
+### Metrics
+Metrics are also very important for ensuring the performance and reliability of your application. [Prometheus](https://prometheus.io) is a popular and modern system for working with metrics and alerts.
+
+We recommend instrumenting your Django project with [`django-prometheus`](https://github.com/korfuri/django-prometheus) which leverages the [official Prometheus Python client](https://github.com/prometheus/client_python). The [test Django projects](tests) are instrumented in this way. You can also implement custom metrics using the client library.
+
+One important note is that when using Gunicorn, the Prometheus client must be used in [multiprocess mode](https://github.com/prometheus/client_python#multiprocess-mode-gunicorn). Because Gunicorn is designed with supervised worker processes, the multiprocess mode is necessary to preserve metrics across multiple worker processes or worker restarts. This mode has a number of limitations so you should read the docs and be aware of those.
+
+django-bootstrap **will always configure multiprocess mode** for the Prometheus client. Note that this requires that metrics are written to disk (at `/run/gunicorn/prometheus`) and so may have performance implications.
 
 ## Production-readiness
 django-bootstrap has been used in production at [Praekelt.org](https://www.praekelt.org) for several years now for thousands of containers serving millions of users around the world. django-bootstrap was designed to encapsulate many of our best practices for deploying production-ready Django.
