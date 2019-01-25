@@ -277,9 +277,13 @@ Metrics are also very important for ensuring the performance and reliability of 
 
 We recommend instrumenting your Django project with [`django-prometheus`](https://github.com/korfuri/django-prometheus) which leverages the [official Prometheus Python client](https://github.com/prometheus/client_python). The [test Django projects](tests) are instrumented in this way. You can also implement custom metrics using the client library.
 
-One important note is that when using Gunicorn, the Prometheus client must be used in [multiprocess mode](https://github.com/prometheus/client_python#multiprocess-mode-gunicorn). Because Gunicorn is designed with supervised worker processes, the multiprocess mode is necessary to preserve metrics across multiple worker processes or worker restarts. This mode has a number of limitations so you should read the docs and be aware of those.
+One important note is that when using Gunicorn with its default configuration, the Prometheus client **must be used in [multiprocess mode](https://github.com/prometheus/client_python#multiprocess-mode-gunicorn)**. Because Gunicorn is designed with supervised worker processes, the multiprocess mode is necessary to preserve metrics across multiple worker processes or worker restarts. This mode has a number of limitations so you should read the docs and be aware of those.
 
-django-bootstrap **will always configure multiprocess mode** for the Prometheus client. Note that this requires that metrics are written to disk (at `/run/gunicorn/prometheus`) and so may have performance implications.
+django-bootstrap **will configure multiprocess mode** for the Prometheus client if it is detected that multiple workers are configured or the synchronous worker type (the default) is used.
+
+You can also enable multiprocess mode yourself by setting the `prometheus_multiproc_dir` environment variable to the path for a directory to be used for temporary files. If you set this variable to `/run/gunicorn/prometheus`, django-bootstrap will attempt to create that directory.
+
+Note that multiprocess mode requires that metrics are temporarily written to disk and so may have performance implications.
 
 ## Production-readiness
 django-bootstrap has been used in production at [Praekelt.org](https://www.praekelt.org) for several years now for thousands of containers serving millions of users around the world. django-bootstrap was designed to encapsulate many of our best practices for deploying production-ready Django.
