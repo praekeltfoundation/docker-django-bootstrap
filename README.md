@@ -281,7 +281,7 @@ One important note is that when using Gunicorn with its default configuration, t
 
 django-bootstrap **will configure multiprocess mode** for the Prometheus client if it is detected that multiple workers are configured or the synchronous worker type (the default) is used.
 
-You can also enable multiprocess mode yourself by setting the `prometheus_multiproc_dir` environment variable to the path for a directory to be used for temporary files. If you set this variable to `/run/gunicorn/prometheus`, django-bootstrap will attempt to create that directory.
+You can also enable multiprocess mode yourself by setting the `prometheus_multiproc_dir` environment variable to the path for a directory to be used for temporary files. If you set this variable, django-bootstrap will attempt to create that directory and its parents.
 
 Note that multiprocess mode requires that metrics are temporarily written to disk and so may have performance implications.
 
