@@ -45,25 +45,17 @@ def nworkers_changed(server, new_value, old_value):
             os.environ["prometheus_multiproc_dir"] = (
                 DEFAULT_PROMETHEUS_MULTIPROC_DIR)
 
+    # Try to create the prometheus_multiproc_dir if set but fail gracefully
     if "prometheus_multiproc_dir" in os.environ:
-        prometheus_multiproc_dir = os.environ["prometheus_multiproc_dir"]
+        path = os.environ["prometheus_multiproc_dir"]
+        # mkdir -p equivalent: https://stackoverflow.com/a/600612/3077893
         try:
-            _mkdir_p(prometheus_multiproc_dir)
+            os.makedirs(path)
         except OSError as e:
-            server.log.warning(
-                "Unable to create prometheus_multiproc_dir directory at '%s'",
-                prometheus_multiproc_dir, exc_info=e)
-
-
-# https://stackoverflow.com/a/600612/3077893
-def _mkdir_p(path):
-    try:
-        os.makedirs(path)
-    except OSError as e:
-        if e.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
+            if e.errno != errno.EEXIST or not os.path.isdir(path):
+                server.log.warning(
+                    ("Unable to create prometheus_multiproc_dir directory at "
+                     "'%s'"), path, exc_info=e)
 
 
 def worker_exit(server, worker):
