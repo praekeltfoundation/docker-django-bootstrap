@@ -1,3 +1,4 @@
+import errno
 import os
 
 from gunicorn.workers.sync import SyncWorker
@@ -44,11 +45,25 @@ def nworkers_changed(server, new_value, old_value):
             os.environ["prometheus_multiproc_dir"] = (
                 DEFAULT_PROMETHEUS_MULTIPROC_DIR)
 
-    # If the default directory is set, try create the directory ourselves
-    if (os.environ.get("prometheus_multiproc_dir")
-            == DEFAULT_PROMETHEUS_MULTIPROC_DIR):
-        if not os.path.exists(DEFAULT_PROMETHEUS_MULTIPROC_DIR):
-            os.mkdir(DEFAULT_PROMETHEUS_MULTIPROC_DIR)
+    if "prometheus_multiproc_dir" in os.environ:
+        prometheus_multiproc_dir = os.environ["prometheus_multiproc_dir"]
+        try:
+            _mkdir_p(prometheus_multiproc_dir)
+        except OSError as e:
+            server.log.warning(
+                "Unable to create prometheus_multiproc_dir directory at '%s'",
+                prometheus_multiproc_dir, exc_info=e)
+
+
+# https://stackoverflow.com/a/600612/3077893
+def _mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as e:
+        if e.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
 
 def worker_exit(server, worker):
