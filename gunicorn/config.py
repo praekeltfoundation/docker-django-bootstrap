@@ -1,5 +1,7 @@
 import os
 
+from gunicorn.workers.sync import SyncWorker
+
 # See http://docs.gunicorn.org/en/latest/settings.html for a list of available
 # settings. Note that the setting names are used here and not the CLI option
 # names (e.g. "pidfile", not "pid").
@@ -23,19 +25,30 @@ if os.environ.get("GUNICORN_ACCESS_LOGS"):
 DEFAULT_PROMETHEUS_MULTIPROC_DIR = "/run/gunicorn/prometheus"
 
 
-def _prometheus_multiproc_dir():
-    # Use the existing value if there is one
-    if "prometheus_multiproc_dir" in os.environ:
-        return os.environ["prometheus_multiproc_dir"]
+def nworkers_changed(server, new_value, old_value):
+    # Configure the prometheus_multiproc_dir value. This may seem like a
+    # strange place to do that, but it's the only callback that gets called
+    # before the WSGI app is setup if app preloading is enabled.
 
-    # Else, use a default directory and try manage it ourselves
-    if not os.path.exists(DEFAULT_PROMETHEUS_MULTIPROC_DIR):
-        os.mkdir(DEFAULT_PROMETHEUS_MULTIPROC_DIR)
+    # We only care about the first time the number of workers is set--during
+    # setup. At this point the old_value is None.
+    if old_value is not None:
+        return
 
-    return DEFAULT_PROMETHEUS_MULTIPROC_DIR
+    # If there are multiple processes (num_workers > 1) or the workers are
+    # synchronous (in which case in production the num_workers will need to be
+    # >1), enable multiprocess mode by default.
+    if server.num_workers > 1 or server.worker_class == SyncWorker:
+        # Don't override an existing value
+        if "prometheus_multiproc_dir" not in os.environ:
+            os.environ["prometheus_multiproc_dir"] = (
+                DEFAULT_PROMETHEUS_MULTIPROC_DIR)
 
-
-raw_env = ["=".join(("prometheus_multiproc_dir", _prometheus_multiproc_dir()))]
+    # If the default directory is set, try create the directory ourselves
+    if (os.environ.get("prometheus_multiproc_dir")
+            == DEFAULT_PROMETHEUS_MULTIPROC_DIR):
+        if not os.path.exists(DEFAULT_PROMETHEUS_MULTIPROC_DIR):
+            os.mkdir(DEFAULT_PROMETHEUS_MULTIPROC_DIR)
 
 
 def worker_exit(server, worker):
