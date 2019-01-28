@@ -12,6 +12,7 @@ setup(
         'django_compressor >=2.1',
         'django-environ',
         'django-health-check',
+        'django-prometheus',
         'psycopg2 >=2.7',
     ],
 )

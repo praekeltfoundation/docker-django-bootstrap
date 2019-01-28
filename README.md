@@ -9,7 +9,7 @@ Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn
 
 Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
 
-> **NOTE:** The `latest`/shorter form tags now track the latest Python and Debian releases. The latest/shorter tags for these images originally pointed to Debian Jessie and Python 2.7 images. This has been updated to match the behaviour of the upstream image tags. You should generally use the most specific tag that you need, for example `py3.6-stretch`.
+> **NOTE:** Integration with the [`prometheus_client`](https://github.com/prometheus/client_python) library was recently added to the image. This may impact users who were using that library already. Please read the [metrics](#metrics) documentation for more information.
 
 For more background on running Django in Docker containers, see [this talk](https://www.youtube.com/watch?v=T2hooQzvurQ) ([slides](https://speakerdeck.com/jayh5/deploying-django-web-applications-in-docker-containers)) from PyConZA 2017.
 
@@ -27,6 +27,7 @@ For more background on running Django in Docker containers, see [this talk](http
 3. [Choosing an image tag](#choosing-an-image-tag)
 4. [Monitoring and metrics](#monitoring-and-metrics)
    - [Health checks](#health-checks)
+   - [Metrics](#metrics)
 5. [Production-readiness](#production-readiness)
 6. [Frequently asked questions](#frequently-asked-questions)
    - [How is this deployed?](#how-is-this-deployed)
@@ -270,6 +271,19 @@ There are a few popular libraries available for implementing health checks in Dj
 * [`django-healthchecks`](https://github.com/mvantellingen/django-healthchecks)
 
 The [example Django projects](tests) we use to test `django-bootstrap` use a very basic configuration of [`django-health-check`](https://github.com/KristianOellegaard/django-health-check). Health checks can also be implemented from scratch in Django quite easily.
+
+### Metrics
+Metrics are also very important for ensuring the performance and reliability of your application. [Prometheus](https://prometheus.io) is a popular and modern system for working with metrics and alerts.
+
+We recommend instrumenting your Django project with [`django-prometheus`](https://github.com/korfuri/django-prometheus) which leverages the [official Prometheus Python client](https://github.com/prometheus/client_python). The [test Django projects](tests) are instrumented in this way. You can also implement custom metrics using the client library.
+
+One important note is that when using Gunicorn with its default configuration, the Prometheus client **must be used in [multiprocess mode](https://github.com/prometheus/client_python#multiprocess-mode-gunicorn)**. Because Gunicorn is designed with supervised worker processes, the multiprocess mode is necessary to preserve metrics across multiple worker processes or worker restarts. This mode has a number of limitations so you should read the docs and be aware of those.
+
+django-bootstrap **will configure multiprocess mode** for the Prometheus client if it is detected that multiple workers are configured or the synchronous worker type (the default) is used.
+
+You can also enable multiprocess mode yourself by setting the `prometheus_multiproc_dir` environment variable to the path for a directory to be used for temporary files. If you set this variable, django-bootstrap will attempt to create that directory and its parents.
+
+Note that multiprocess mode requires that metrics are temporarily written to disk and so may have performance implications.
 
 ## Production-readiness
 django-bootstrap has been used in production at [Praekelt.org](https://www.praekelt.org) for several years now for thousands of containers serving millions of users around the world. django-bootstrap was designed to encapsulate many of our best practices for deploying production-ready Django.

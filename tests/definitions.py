@@ -20,7 +20,7 @@ db_container = PostgreSQLContainer(wait_timeout=DEFAULT_WAIT_TIMEOUT)
 amqp_container = RabbitMQContainer(
     vhost='/mysite', wait_timeout=DEFAULT_WAIT_TIMEOUT)
 
-default_env = env = {
+default_env = {
     'SECRET_KEY': 'secret',
     'ALLOWED_HOSTS': 'localhost,127.0.0.1,0.0.0.0',
     'CELERY_BROKER_URL': amqp_container.broker_url(),
@@ -42,6 +42,11 @@ class _BaseContainerDefinition(ContainerDefinition):
 
     def exec_stat(self, *paths, format='%a %U:%G'):
         return self.exec_run(['stat'] + ['--format', format] + list(paths))
+
+    def django_maj_version(self):
+        [version] = self.exec_run(
+            ['python', '-c', 'import django; print(django.__version__)'])
+        return int(version.split('.')[0])
 
 
 class GunicornContainer(_BaseContainerDefinition):

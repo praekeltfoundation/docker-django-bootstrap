@@ -8,6 +8,7 @@ install_requires = [
     'Django >=1.11, <1.12',
     'django_compressor >=2.1',
     'django-environ',
+    'django-prometheus',
     'psycopg2 >=2.7',
 ]
 if sys.version_info[0] < 3:

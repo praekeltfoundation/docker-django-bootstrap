@@ -16,7 +16,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+import django_prometheus
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('health/', include('health_check.urls'))
+    path('health/', include('health_check.urls')),
+    path('metrics/', django_prometheus.exports.ExportToDjangoView,
+         name='prometheus-django-metrics'),
 ]

@@ -1,4 +1,7 @@
+import errno
 import os
+
+from gunicorn.workers.sync import SyncWorker
 
 # See http://docs.gunicorn.org/en/latest/settings.html for a list of available
 # settings. Note that the setting names are used here and not the CLI option
@@ -18,3 +21,53 @@ worker_tmp_dir = "/run/gunicorn"
 
 if os.environ.get("GUNICORN_ACCESS_LOGS"):
     accesslog = "-"
+
+
+DEFAULT_PROMETHEUS_MULTIPROC_DIR = "/run/gunicorn/prometheus"
+
+
+def nworkers_changed(server, new_value, old_value):
+    # Configure the prometheus_multiproc_dir value. This may seem like a
+    # strange place to do that, but it's the only callback that gets called
+    # before the WSGI app is setup if app preloading is enabled.
+
+    # We only care about the first time the number of workers is set--during
+    # setup. At this point the old_value is None.
+    if old_value is not None:
+        return
+
+    # If there are multiple processes (num_workers > 1) or the workers are
+    # synchronous (in which case in production the num_workers will need to be
+    # >1), enable multiprocess mode by default.
+    if server.num_workers > 1 or server.worker_class == SyncWorker:
+        # Don't override an existing value
+        if "prometheus_multiproc_dir" not in os.environ:
+            os.environ["prometheus_multiproc_dir"] = (
+                DEFAULT_PROMETHEUS_MULTIPROC_DIR)
+
+    # Try to create the prometheus_multiproc_dir if set but fail gracefully
+    if "prometheus_multiproc_dir" in os.environ:
+        path = os.environ["prometheus_multiproc_dir"]
+        # mkdir -p equivalent: https://stackoverflow.com/a/600612/3077893
+        try:
+            os.makedirs(path)
+        except OSError as e:
+            if e.errno != errno.EEXIST or not os.path.isdir(path):
+                server.log.warning(
+                    ("Unable to create prometheus_multiproc_dir directory at "
+                     "'%s'"), path, exc_info=e)
+
+
+def worker_exit(server, worker):
+    # Do bookkeeping for Prometheus collectors for each worker process as they
+    # exit, as described in the prometheus_client documentation:
+    # https://github.com/prometheus/client_python#multiprocess-mode-gunicorn
+    if "prometheus_multiproc_dir" in os.environ:
+        # Don't error if the environment variable has been set but
+        # prometheus_client isn't installed
+        try:
+            from prometheus_client import multiprocess
+        except ImportError:
+            return
+
+        multiprocess.mark_process_dead(worker.pid)
