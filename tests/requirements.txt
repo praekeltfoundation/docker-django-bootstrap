@@ -1,11 +1,8 @@
-seaworthy >= 0.4.1
+seaworthy >= 0.4.2
 iso8601
 prometheus_client
 pytest >= 3.3
 testtools
-# FIXME: Temp workaround for dependency conflict between requests 2.20.1/idna 2.8
-# https://github.com/requests/requests/pull/4889
-idna < 2.8
 
 flake8
 flake8-import-order
