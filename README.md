@@ -253,8 +253,7 @@ If you need more Celery worker processes, you have the choice of either upping t
 The following tags are available:
 
 |                    | Python 2.7                                  | Python 3.6              | Python 3.7                                                     |
-|--------------------|---------------------------------------------|-------------------------|----------------------------------------------------------------|
-| **Debian Jessie**  | `py2.7-jessie` `py2-jessie` `jessie`        | `py3.6-jessie`          | N/A                                                            |
+|--------------------|---------------------------------------------|-------------------------|----------------------------------------------------------------|                                                            |
 | **Debian Stretch** | `py2.7-stretch` `py2-stretch` `py2.7` `py2` | `py3.6-stretch` `py3.6` | `py3.7-stretch` `py3-stretch` `stretch` `py3.7` `py3` `latest` |
 
 It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is the latest release and the default operating system is the latest stable Debian release.
