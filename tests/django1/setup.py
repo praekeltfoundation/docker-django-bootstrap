@@ -6,7 +6,8 @@ from setuptools import setup
 install_requires = [
     'celery >=4.2, <4.3',
     'Django >=1.11, <1.12',
-    'django_compressor >=2.1',
+    'django-appconf < 1.0.3',  # Last version with py27 support.
+    'django_compressor >=2.1, <2.4',  # Last version with py27 support.
     'django-environ',
     'django-prometheus',
     'psycopg2 >=2.7',
