@@ -8,7 +8,7 @@ setup(
     packages=['mysite'],
     install_requires=[
         'celery >=4.2, <4.3',
-        'Django >=2.1, <2.2',
+        'Django >=2.2.2, <2.3',
         'django_compressor >=2.1',
         'django-environ',
         'django-health-check',
