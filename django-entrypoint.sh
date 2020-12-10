@@ -32,7 +32,7 @@ if [ "$1" = 'gunicorn' ]; then
   fi
 
   # Allow running of collectstatic command because it might require env vars
-  if [ -n "$RUN_COLLECTSTATIC" ] && [$RUN_COLLECTSTATIC == 'True']; then
+  if [ -n "$RUN_COLLECTSTATIC" ]; then
     su-exec django django-admin collectstatic --noinput
   fi
 
