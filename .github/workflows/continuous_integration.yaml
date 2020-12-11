@@ -26,6 +26,7 @@ jobs:
         include:
           - py_version: 3.7
             test_project: django2
+            variant: stretch
 
     steps:
       - uses: actions/checkout@v2
@@ -63,8 +64,14 @@ jobs:
         include:
           - py_version: 3.7
             test_project: django2
+            variant: stretch
             version_latest: -L
+            tag_latest: latest
+            semver_precision: 1
           - py_version: 3.6
+            test_project: django1
+            variant: stretch
+            tag_latest: latest
             semver_precision: 2
 
     steps:
