@@ -11,6 +11,9 @@ jobs:
   tests:
     name: tests
     runs-on: ubuntu-latest
+    env:
+      TAG: py${{ matrix.py_version }}-${{ matrix.variant }}
+      IMAGE: praekeltfoundation/django-bootstrap:py${{ matrix.py_version }}-${{ matrix.variant }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,17 +32,15 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.py_version }}
-          tag: py${{ matrix.py_version }}-${{ matrix.variant }}
-          image: praekeltfoundation/django-bootstrap:${{ tag }}
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r tests/requirements.txt
       - name: Run tests
         run: |
-          docker build --pull --cache-from ${{ image }} --build-arg PYTHON_VERSION=${{ matrix.py_version }}-${{ matrix.variant }} --tag ${{image}} .
-          docker build -t "mysite:${{ tag }}" --build-arg VARIANT=${{ tag }} --build-arg PROJECT=${{ test_project }} tests
-          pytest -v tests/test.py --django-bootstrap-image="mysite:${{ tag }}"
+          docker build --pull --cache-from $IMAGE --build-arg PYTHON_VERSION=${{ matrix.py_version }}-${{ matrix.variant }} --tag $IMAGE .
+          docker build -t "mysite:$TAG" --build-arg VARIANT=$TAG --build-arg PROJECT=${{ test_project }} tests
+          pytest -v tests/test.py --django-bootstrap-image="mysite:$TAG"
           flake8 gunicorn/config.py
           cd tests; flake8
   build:
@@ -47,6 +48,8 @@ jobs:
     needs: tests
     name: Docker Build
     runs-on: ubuntu-latest
+    env:
+      IMAGE: praekeltfoundation/django-bootstrap:py${{ matrix.py_version }}-${{ matrix.variant }}
     strategy:
       matrix:
         py_version: [2.7, 3.6, 3.7]
@@ -69,9 +72,8 @@ jobs:
       - uses: actions/setup-python@v2
         with:
           python_version: 3.7
-          image: praekeltfoundation/django-bootstrap:${{ tag }}
       - name: build and deploy
         run: |
           pip install docker-ci-deploy==0.3.0
           echo ${{ secrets.DOCKER_PASSWORD }} | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-          dcd -t ${{matrix.variant}} ${{matrix.tag_latest}} -V "py${{matrix.py_version}}" --version-semver -P ${{matrix.semver_precision}} ${{matrix.version_latest}} ${{image}}
+          dcd -t ${{matrix.variant}} ${{matrix.tag_latest}} -V "py${{matrix.py_version}}" --version-semver -P ${{matrix.semver_precision}} ${{matrix.version_latest}} $IMAGE
