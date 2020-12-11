@@ -39,7 +39,7 @@ jobs:
       - name: Run tests
         run: |
           docker build --pull --cache-from $IMAGE --build-arg PYTHON_VERSION=${{ matrix.py_version }}-${{ matrix.variant }} --tag $IMAGE .
-          docker build -t "mysite:$TAG" --build-arg VARIANT=$TAG --build-arg PROJECT=${{ test_project }} tests
+          docker build -t "mysite:$TAG" --build-arg VARIANT=$TAG --build-arg PROJECT=${{ matrix.test_project }} tests
           pytest -v tests/test.py --django-bootstrap-image="mysite:$TAG"
           flake8 gunicorn/config.py
           cd tests; flake8
