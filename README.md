@@ -105,6 +105,8 @@ The script also allows you to create a Django super user account if needed. Sett
 
 By default the script will run the migrations when starting up. This may not be desirable in all situations. If you want to run migrations separately using `django-admin` then setting the `SKIP_MIGRATIONS` environment variable will result in them not being run.
 
+By default the script assumes that static files have been collected as part of the Docker build step. If they need to be run on container start with `django-admin collecstatic` then setting the `RUN_COLLECTSTATIC` environment variable will make that happen.
+
 #### Step 3: Add a `.dockerignore` file (if copying in the project source)
 If you are copying the full source of your project into your Docker image (i.e. doing `COPY . /app`), then it is important to add a `.dockerignore` file.
 

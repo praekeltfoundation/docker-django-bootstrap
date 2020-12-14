@@ -31,6 +31,11 @@ if [ "$1" = 'gunicorn' ]; then
     su-exec django django-admin migrate --noinput
   fi
 
+  # Allow running of collectstatic command because it might require env vars
+  if [ -n "$RUN_COLLECTSTATIC" ]; then
+    su-exec django django-admin collectstatic --noinput
+  fi
+
   if [ -n "$SUPERUSER_PASSWORD" ]; then
     echo "from django.contrib.auth.models import User
 if not User.objects.filter(username='admin').exists():
