@@ -364,7 +364,7 @@ class TestWeb(object):
         restart can be observed after the worker restart.
         """
         web_client = web_container.http_client()
-        response = web_client.get('/metrics', headers={'Connection':'close'})
+        response = web_client.get('/metrics', headers={'Connection': 'close'})
 
         [sample] = http_requests_total_for_view(
             response.text, 'prometheus-django-metrics')
