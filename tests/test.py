@@ -369,7 +369,6 @@ class TestWeb(object):
         [sample] = http_requests_total_for_view(
             response.text, 'prometheus-django-metrics')
         assert_that(sample.value, Equals(1.0))
-        response.close()
 
         # Signal Gunicorn so that it restarts the worker(s)
         # http://docs.gunicorn.org/en/latest/signals.html
