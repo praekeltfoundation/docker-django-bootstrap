@@ -364,7 +364,7 @@ class TestWeb(object):
         restart can be observed after the worker restart.
         """
         web_client = web_container.http_client()
-        response = web_client.get('/metrics', headers={'Connection': 'close'})
+        response = web_client.get('/metrics')
 
         [sample] = http_requests_total_for_view(
             response.text, 'prometheus-django-metrics')
@@ -383,6 +383,8 @@ class TestWeb(object):
             matcher, web_container.wait_timeout)
 
         # Now try make another request and ensure the counter was incremented
+        # We use a new client here to ensure the old connection isn't reused
+        web_client = web_container.http_client()
         response = web_client.get('/metrics')
         [sample] = http_requests_total_for_view(
             response.text, 'prometheus-django-metrics')
