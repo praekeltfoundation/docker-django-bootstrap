@@ -151,11 +151,11 @@ class TestWeb(object):
         nginx_master_args = 'nginx: master process nginx -g daemon off;'
         nginx_worker_args = 'nginx: worker process'
         celery_worker_args = (
-            '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
-            '--pidfile worker.pid --concurrency 1')
+            '/usr/local/bin/python /usr/local/bin/celery --pool=solo '
+            '--pidfile worker.pid --concurrency 1 worker')
         celery_beat_args = (
-            '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
-            'beat.pid')
+            '/usr/local/bin/python /usr/local/bin/celery --pidfile '
+            'beat.pid beat')
 
         assert_that(
             ps_tree,
@@ -726,11 +726,11 @@ class TestCeleryWorker(object):
 
         tini_args = 'tini -- django-entrypoint.sh celery worker'
         celery_master_args = (
-            '/usr/local/bin/python /usr/local/bin/celery worker '
-            '--concurrency 1')
+            '/usr/local/bin/python /usr/local/bin/celery '
+            '--concurrency 1 worker')
         celery_worker_args = (
-            '/usr/local/bin/python /usr/local/bin/celery worker '
-            '--concurrency 1')
+            '/usr/local/bin/python /usr/local/bin/celery '
+            '--concurrency 1 worker')
 
         assert_that(
             ps_tree,
