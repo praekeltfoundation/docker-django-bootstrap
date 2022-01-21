@@ -13,6 +13,6 @@ setup(
         'django-environ',
         'django-health-check',
         'django-prometheus',
-        'psycopg2 >=2.7',
+        'psycopg2-binary >=2.7',
     ],
 )
