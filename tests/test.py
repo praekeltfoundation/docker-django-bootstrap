@@ -729,7 +729,7 @@ class TestCeleryWorker(object):
             '/usr/local/bin/python /usr/local/bin/celery worker '
             '--concurrency 1')
         celery_worker_args = (
-            '/usr/local/bin/python /usr/local/bin/celery worker'
+            '/usr/local/bin/python /usr/local/bin/celery worker '
             '--concurrency 1')
 
         assert_that(
