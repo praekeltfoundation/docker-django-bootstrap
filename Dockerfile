@@ -12,7 +12,7 @@ RUN addgroup --system --gid 107 django \
  RUN apt-get-install.sh libpq5
 
 # Install a modern Nginx and configure
-ENV NGINX_VERSION=1.14.2 \
+ENV NGINX_VERSION=1.20.2 \
     NGINX_GPG_KEY=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
 RUN set -ex; \
     fetchDeps=" \
@@ -29,7 +29,7 @@ RUN set -ex; \
     rm nginx_signing.key; \
     apt-get-purge.sh $fetchDeps; \
     \
-    apt-get-install.sh "nginx=$NGINX_VERSION-2\~$codename"; \
+    apt-get-install.sh "nginx=$NGINX_VERSION-1\~$codename"; \
     rm /etc/nginx/conf.d/default.conf; \
 # Add nginx user to django group so that Nginx can read/write to gunicorn socket
     adduser nginx django
