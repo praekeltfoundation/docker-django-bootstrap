@@ -726,11 +726,11 @@ class TestCeleryWorker(object):
 
         tini_args = 'tini -- django-entrypoint.sh celery worker'
         celery_master_args = (
-            '/usr/local/bin/python /usr/local/bin/celery '
-            '--concurrency 1 worker')
+            '/usr/local/bin/python /usr/local/bin/celery worker '
+            '--concurrency 1')
         celery_worker_args = (
-            '/usr/local/bin/python /usr/local/bin/celery '
-            '--concurrency 1 worker')
+            '/usr/local/bin/python /usr/local/bin/celery worker'
+            '--concurrency 1')
 
         assert_that(
             ps_tree,
