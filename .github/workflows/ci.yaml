@@ -55,7 +55,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: false
-          tags: ${{steups.meta.output.tags}}
+          tags: ${{steps.meta.output.tags}}
           build-args: |
             PYTHON_VERSION=${{matrix.python_version}}-${{matrix.variant}}
       - name: build tests
