@@ -54,12 +54,12 @@ if not User.objects.filter(username='admin').exists():
 
   if [ -n "$CELERY_WORKER" ]; then
     ensure_celery_app
-    celery-entrypoint.sh --pool=solo --pidfile worker.pid worker &
+    celery-entrypoint.sh worker --pool=solo --pidfile worker.pid &
   fi
 
   if [ -n "$CELERY_BEAT" ]; then
     ensure_celery_app
-    celery-entrypoint.sh --pidfile beat.pid beat &
+    celery-entrypoint.sh beat --pidfile beat.pid &
   fi
 
   if [ -n "$APP_MODULE" ]; then

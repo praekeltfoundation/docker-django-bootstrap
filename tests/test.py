@@ -151,11 +151,11 @@ class TestWeb(object):
         nginx_master_args = 'nginx: master process nginx -g daemon off;'
         nginx_worker_args = 'nginx: worker process'
         celery_worker_args = (
-            '/usr/local/bin/python /usr/local/bin/celery --pool=solo '
-            '--pidfile worker.pid --concurrency 1 worker')
+            '/usr/local/bin/python /usr/local/bin/celery worker --pool=solo '
+            '--pidfile worker.pid --concurrency 1')
         celery_beat_args = (
-            '/usr/local/bin/python /usr/local/bin/celery --pidfile '
-            'beat.pid beat')
+            '/usr/local/bin/python /usr/local/bin/celery beat --pidfile '
+            'beat.pid')
 
         assert_that(
             ps_tree,
