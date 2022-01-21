@@ -12,7 +12,7 @@ RUN addgroup --system --gid 107 django \
  RUN apt-get-install.sh libpq5
 
 # Install a modern Nginx and configure
-ENV NGINX_VERSION=1.20.2 \
+ENV NGINX_VERSION=1.18.0 \
     NGINX_GPG_KEY=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62
 RUN set -ex; \
     fetchDeps=" \
