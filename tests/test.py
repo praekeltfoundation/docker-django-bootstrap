@@ -638,7 +638,7 @@ class TestWeb(object):
             '/' + test_file, headers={'Accept-Encoding': 'gzip'})
 
         assert_that(response.headers['Content-Type'],
-                    Equals('application/font-woff'))
+                    Equals('font/woff'))
         assert_that(response.headers, MatchesAll(
             Not(Contains('Content-Encoding')),
             Not(Contains('Vary')),

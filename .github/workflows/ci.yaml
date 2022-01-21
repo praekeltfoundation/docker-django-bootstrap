@@ -1,0 +1,71 @@
+name: Continuous Integration
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+    branches:
+      - develop
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - python_version: "3.7"
+            variant: stretch
+            test_project: django2
+          - python_version: "3.8"
+            variant: buster
+            test_project: django2
+          - python_version: "3.9"
+            variant: buster
+            test_project: django2
+    env:
+      TAG: py${{ matrix.python_version }}-${{ matrix.variant }}
+      IMAGE: praekeltfoundation/django-bootstrap:py${{ matrix.python_version }}-${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: 3.9.10
+      - name: run tests
+        run: |
+          docker build --pull --cache-from "$IMAGE" --build-arg PYTHON_VERSION="${{matrix.python_version}}-${{matrix.variant}}" --tag "$IMAGE" .
+          docker build -t "mysite:$TAG" --build-arg VARIANT="$TAG" --build-arg PROJECT="${{matrix.test_project}}" tests
+          pip install -r tests/requirements.txt
+          pytest -v tests/test.py --django-bootstrap-image="mysite:$TAG"
+          flake8 gunicorn/config.py
+          cd tests; flake8
+      - uses: docker/setup-buildx-action@v1
+      - name: construct image metadata
+        uses: docker/metadata-action@v3
+        id: meta
+        with:
+          images: |
+            praekeltfoundation/django-bootstrap
+            ghcr.io/praekeltfoundation/django-bootstrap
+          tags: |
+            type=pep440,pattern=py{{major}},value=${{matrix.python_version}}
+            type=raw,value=py${{matrix.python_version}}
+            type=raw,value=${{matrix.variant}}
+            type=pep440,pattern=py{{major}}-${{matrix.variant}},value=${{matrix.python_version}}
+            type=raw,value=py${{matrix.python_version}}-${{matrix.variant}}
+      - name: login to ghcr
+        uses: docker/login-action@v1
+        with:
+          registry: ghcr.io
+          username: ${{github.actor}}
+          password: ${{secrets.GITHUB_TOKEN}}
+      - name: login to docker hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{secrets.DOCKER_USERNAME}}
+          password: ${{secrets.DOCKER_PASSWORD}}
+      - name: build and push
+        uses: docker/build-push-action@v2
+        with:
+          push: ${{github.event_name != 'pull_request'}}
+          tags: ${{steps.meta.outputs.tags}}
+          build-args: |
+            PYTHON_VERSION=${{matrix.python_version}}-${{matrix.variant}}
