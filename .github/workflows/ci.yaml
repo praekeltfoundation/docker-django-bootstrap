@@ -55,7 +55,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: false
-          tags: "praekeltfoundation/django-bootstrap:py${{matrix.python_version}}-${{matrix.variant}}"
+          tags: ${{steups.meta.output.tags}}
           build-args: |
             PYTHON_VERSION=${{matrix.python_version}}-${{matrix.variant}}
       - name: build tests
