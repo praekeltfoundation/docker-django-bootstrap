@@ -29,7 +29,7 @@ RUN set -ex; \
     rm nginx_signing.key; \
     apt-get-purge.sh $fetchDeps; \
     \
-    apt-get-install.sh "nginx=$NGINX_VERSION-1\~$codename"; \
+    apt-get-install.sh "nginx=$NGINX_VERSION-2\~$codename"; \
     rm /etc/nginx/conf.d/default.conf; \
 # Add nginx user to django group so that Nginx can read/write to gunicorn socket
     adduser nginx django
