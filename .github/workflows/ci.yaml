@@ -36,10 +36,10 @@ jobs:
             ghcr.io/praekeltfoundation/django-bootstrap
           tags: |
             type=pep440,pattern=py{{major}},value=${{matrix.python_version}}
-            type=pep440,pattern=py{{major}}.{{minor}},value={{matrix.python_version}}
+            type=raw,pattern=py${{matrix.python_version}}
             type=raw,value=${{matrix.variant}}
             type=pep440,pattern=py{{major}}-${{matrix.variant}},value=${{matrix.python_version}}
-            type=pep440,pattern=py{{major}}.{{minor}}-${{matrix.variant}},value={{matrix.python_version}}
+            type=raw,pattern=py${{matrix.python_version}}-${{matrix.variant}}
       - name: login to ghcr
         uses: docker/login-action@v1
         with:
