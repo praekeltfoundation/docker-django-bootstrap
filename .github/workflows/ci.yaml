@@ -21,11 +21,38 @@ jobs:
           - python_version: "3.9"
             variant: buster
             test_project: django2
+    env:
+      TAG: py${{ matrix.python_version }}-${{ matrix.variant }}
+      IMAGE: praekeltfoundation/django-bootstrap:py${{ matrix.python_version }}-${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: 3.9.10
+      - name: build bootstrap
+        uses: docker/build-push-action@v2
+        with:
+          push: false
+          tags: ${{steps.meta.output.tags}}
+          build-args: |
+            PYTHON_VERSION=${{matrix.python_version}}-${{matrix.variant}}
+      - name: build tests
+        uses: docker/build-push-action@v2
+        with:
+          push: false
+          context: tests
+          tags: tests
+          build-args: |
+            VARIANT=py${{matrix.python_version}}-${{matrix.variant}}
+            PROJECT=${{matrix.test_project}}
+      - name: run tests
+        run: |
+          docker build --pull --cache-from "$IMAGE" --build-arg PYTHON_VERSION="${{matrix.python_version}}-${{matrix.variant}}" --tag "$IMAGE" .
+          docker build -t "mysite:$TAG" --build-arg VARIANT="$TAG" --build-arg PROJECT="${{matrix.test_project}}" tests
+          pip install -r tests/requirements.txt
+          pytest -v tests/test.py --django-bootstrap-image="mysite:$TAG"
+          flake8 gunicorn/config.py
+          cd tests; flake8
       - uses: docker/setup-buildx-action@v1
       - name: construct image metadata
         uses: docker/metadata-action@v3
@@ -51,28 +78,6 @@ jobs:
         with:
           username: ${{secrets.DOCKER_USERNAME}}
           password: ${{secrets.DOCKER_PASSWORD}}
-      - name: build bootstrap
-        uses: docker/build-push-action@v2
-        with:
-          push: false
-          tags: ${{steps.meta.output.tags}}
-          build-args: |
-            PYTHON_VERSION=${{matrix.python_version}}-${{matrix.variant}}
-      - name: build tests
-        uses: docker/build-push-action@v2
-        with:
-          push: false
-          context: tests
-          tags: tests
-          build-args: |
-            VARIANT=py${{matrix.python_version}}-${{matrix.variant}}
-            PROJECT=${{matrix.test_project}}
-      - name: run tests
-        run: |
-          pip install -r tests/requirements.txt
-          pytest -v tests/test.py --django-bootstrap-image=tests
-          flake8 gunicorn/config.py
-          cd tests; flake8
       - name: build and push
         uses: docker/build-push-action@v2
         with:
