@@ -6,8 +6,9 @@ _is_celery_command () {
 
   python - <<EOF
 import sys
-from celery.bin.celery import CeleryCommand
-sys.exit(0 if '$cmd' in CeleryCommand.commands else 1)
+from celery.bin.celery import celery
+from click import Context
+sys.exit(0 if '$cmd' in celery.list_commands(Context(celery)) else 1)
 EOF
 }
 
