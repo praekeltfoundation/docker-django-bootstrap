@@ -419,20 +419,20 @@ class TestWeb(object):
             client = django_container.http_client()
 
             # Make a bunch of requests
-            for _ in range(10):
+            for _ in range(20):
                 response = client.get('/admin')
                 assert_that(response.status_code, Equals(200))
 
             # Check the metrics a bunch of times for a few things...
             # We don't know which worker serves which request, so we just
             # make a few requests hoping we'll hit multiple/all of them.
-            for i in range(10):
+            for i in range(20):
                 response = client.get('/metrics')
 
                 # Requests to the admin page are counted
                 [admin_sample] = http_requests_total_for_view(
                     response.text, view='admin:index')
-                assert_that(admin_sample.value, Equals(10.0))
+                assert_that(admin_sample.value, Equals(20.0))
 
                 # Requests to the metrics endpoint increment
                 [metrics_sample] = http_requests_total_for_view(
