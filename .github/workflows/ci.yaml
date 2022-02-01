@@ -99,7 +99,7 @@ jobs:
         id: meta
         with:
           images: |
-            ghcr.io/praekeltfoundation/docker-django-bootstrap
+            ghcr.io/praekeltfoundation/docker-django-bootstrap-nw
           tags: |
             type=pep440,pattern=py{{major}},value=${{matrix.python_version}}
             type=raw,value=py${{matrix.python_version}}
