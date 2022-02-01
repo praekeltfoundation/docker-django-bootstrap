@@ -1,5 +1,5 @@
 ARG PYTHON_VERSION=3.10-bullseye
-FROM praekeltfoundation/python-base-nw:${PYTHON_VERSION}
+FROM ghcr.io/praekeltfoundation/python-base-nw:${PYTHON_VERSION}
 
 # Create the user and group first as they shouldn't change often.
 # Specify the UID/GIDs so that they do not change somehow and mess with the
