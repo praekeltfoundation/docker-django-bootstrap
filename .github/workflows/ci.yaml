@@ -79,7 +79,7 @@ jobs:
         test_project: [django2]
     env:
       TAG: py${{ matrix.python_version }}-${{ matrix.variant }}
-      IMAGE: praekeltfoundation/django-bootstrap:py${{ matrix.python_version }}-${{ matrix.variant }}
+      IMAGE: ghcr.io/praekeltfoundation/docker-django-bootstrap:py${{ matrix.python_version }}-${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
@@ -87,8 +87,8 @@ jobs:
           python-version: 3.9.10
       - name: run tests
         run: |
-          docker build --pull --cache-from "$IMAGE" --build-arg PYTHON_VERSION="${{matrix.python_version}}-${{matrix.variant}}" --tag "$IMAGE" .
-          docker build -t "mysite:$TAG" --build-arg VARIANT="$TAG" --build-arg PROJECT="${{matrix.test_project}}" tests
+          docker build -f Dockerfile.no-wheelhouse --pull --cache-from "$IMAGE" --build-arg PYTHON_VERSION="${{matrix.python_version}}-${{matrix.variant}}" --tag "$IMAGE" .
+          docker build -f Dockerfile.no-wheelhouse -t "mysite:$TAG" --build-arg VARIANT="$TAG" --build-arg PROJECT="${{matrix.test_project}}" tests
           pip install -r tests/requirements.txt
           pytest -v tests/test.py --django-bootstrap-image="mysite:$TAG"
           flake8 gunicorn/config.py
