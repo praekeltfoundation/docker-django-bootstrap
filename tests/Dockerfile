@@ -1,6 +1,5 @@
-ARG VARIANT=py3-stretch
-ARG BASE_IMAGE=praekeltfoundation/django-bootstrap
-FROM $BASE_IMAGE:$VARIANT
+ARG BASE_IMAGE=praekeltfoundation/django-bootstrap:py3-stretch
+FROM $BASE_IMAGE
 
 RUN command -v ps > /dev/null || apt-get-install.sh procps
 
