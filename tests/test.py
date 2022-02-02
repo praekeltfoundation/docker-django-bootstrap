@@ -380,6 +380,8 @@ class TestWeb(object):
         )))
         web_container.wait_for_logs_matching(
             matcher, web_container.wait_timeout)
+        # Wait a little longer to make sure everything's up
+        time.sleep(0.2)
 
         # Now try make another request and ensure the counter was incremented
         response = web_client.get('/metrics')
