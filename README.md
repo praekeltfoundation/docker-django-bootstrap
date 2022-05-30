@@ -1,7 +1,9 @@
 # docker-django-bootstrap
 
-[![Docker Pulls](https://flat.badgen.net/docker/pulls/praekeltfoundation/django-bootstrap)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
-[![Travis branch](https://flat.badgen.net/travis/praekeltfoundation/docker-django-bootstrap/develop)](https://travis-ci.org/praekeltfoundation/docker-django-bootstrap)
+[![Docker Pulls](https://img.shields.io/docker/pulls/praekeltfoundation/django-bootstrap)](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/)
+[![GitHub Workflow](https://img.shields.io/github/workflow/status/praekeltfoundation/docker-django-bootstrap/Continuous%20Integration)](https://github.com/praekeltfoundation/docker-django-bootstrap/actions/workflows/ci.yaml)
+
+
 
 Dockerfile for quickly running Django projects in a Docker container.
 
