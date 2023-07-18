@@ -1,3 +1,6 @@
+# Pin to older requests version for seaworthy deps
+requests < 2.29
+
 seaworthy >= 0.4.2
 iso8601
 prometheus_client
