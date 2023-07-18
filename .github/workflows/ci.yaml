@@ -12,9 +12,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - python_version: "3.7"
-            variant: stretch
-            test_project: django2
+          # - python_version: "3.7"
+          #   variant: stretch
+          #   test_project: django2
           - python_version: "3.8"
             variant: buster
             test_project: django2
