@@ -4,7 +4,7 @@ requests < 2.29
 seaworthy >= 0.4.2
 iso8601
 prometheus_client
-pytest >= 3.3, < 5.0
+pytest >= 3.3, < 8.0
 testtools
 
 flake8
