@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python_version: ["3.10", "3.9", "3.8"]
+        python_version: ["3.10", "3.9", "3.8", "3.7"]
         variant: [buster, bullseye]
         test_project: [django2]
     env:
