@@ -10,9 +10,10 @@ jobs:
   build-no-wheelhouse:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python_version: ["3.10", "3.9", "3.8", "3.7"]
-        variant: [buster, bullseye]
+        variant: [bullseye]
         test_project: [django2]
     env:
       TAG: py${{ matrix.python_version }}-${{ matrix.variant }}
