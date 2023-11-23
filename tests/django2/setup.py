@@ -14,5 +14,7 @@ setup(
         'django-health-check',
         'django-prometheus <2.3',
         'psycopg2-binary >=2.7',
+        # For compat with older celery in Python 3.7
+        'importlib_metadata < 5.0',
     ],
 )
