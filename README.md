@@ -9,7 +9,7 @@ Dockerfile for quickly running Django projects in a Docker container.
 
 Run [Django](https://www.djangoproject.com) projects from source using [Gunicorn](http://gunicorn.org) and [Nginx](http://nginx.org).
 
-Images are available on [Docker Hub](https://hub.docker.com/r/praekeltfoundation/django-bootstrap/). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
+Images are available on [Github Container Registry](https://github.com/orgs/praekeltfoundation/packages?repo_name=docker-django-bootstrap). See [Choosing an image tag](#choosing-an-image-tag). All images are tested using [Seaworthy](https://github.com/praekeltfoundation/seaworthy) before release.
 
 > **NOTE:** Integration with the [`prometheus_client`](https://github.com/prometheus/client_python) library was recently added to the image. This may impact users who were using that library already. Please read the [metrics](#metrics) documentation for more information.
 
@@ -254,11 +254,7 @@ By default Celery runs as many worker processes as there are processors. **We in
 If you need more Celery worker processes, you have the choice of either upping the processes per container or running multiple container instances.
 
 ## Choosing an image tag
-The following tags are available:
-
-|                    | Python 2.7                                  | Python 3.6              | Python 3.7                                                     |
-|--------------------|---------------------------------------------|-------------------------|----------------------------------------------------------------|                                                            |
-| **Debian Stretch** | `py2.7-stretch` `py2-stretch` `py2.7` `py2` | `py3.6-stretch` `py3.6` | `py3.7-stretch` `py3-stretch` `stretch` `py3.7` `py3` `latest` |
+See [Packages](https://github.com/orgs/praekeltfoundation/packages?repo_name=docker-django-bootstrap) for the available packages. Select the type of package (`-nw` for `no-wheelhouse`) to view the available tags.
 
 It's recommended that you pick the most specific tag for what you need, as shorter tags are likely to change their Python and Debian versions over time. `py3` tags currently track the latest Python 3.x version. The default Python version is the latest release and the default operating system is the latest stable Debian release.
 
