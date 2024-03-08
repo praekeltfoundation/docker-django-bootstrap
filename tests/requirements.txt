@@ -1,5 +1,5 @@
 # Pin to older requests version for seaworthy deps
-requests < 2.29
+requests < 2.32
 
 seaworthy >= 0.4.2
 iso8601
